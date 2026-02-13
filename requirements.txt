@@ -1,0 +1,5 @@
+Flask>=3.0
+PyMuPDF>=1.24
+edge-tts>=7.0
+ebooklib>=0.18
+beautifulsoup4>=4.12

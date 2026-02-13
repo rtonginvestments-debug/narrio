@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+output/
+uploads/
+nul
+venv/
+.venv/
+.env
+*.mp3
+.claude/
+usersryanappdatalocaltempedge-tts-inspect/

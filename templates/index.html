@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Narrio — PDF/EPUB to Audiobook</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Decorative background blobs -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+
+    <div class="container">
+        <div class="logo-header">
+            <img src="/static/images/logo.png" alt="Narrio" class="logo">
+        </div>
+        <h1>Turn PDFs & EPUBs Into Audiobooks Instantly</h1>
+        <p class="subtitle">Narrio helps you listen to your documents anywhere with natural AI voices.</p>
+
+        <!-- Upload Section -->
+        <div id="upload-section">
+            <div id="drop-zone" class="drop-zone">
+                <div class="drop-zone-icon">&#127911;</div>
+                <p>Drop your book here — Narrio will start narrating</p>
+                <p class="drop-zone-hint">or click to browse for a PDF or EPUB</p>
+                <input type="file" id="file-input" accept=".pdf,.epub" hidden>
+            </div>
+
+            <div id="file-info" class="file-info hidden">
+                <span id="file-name"></span>
+                <button id="clear-file" class="btn-icon" title="Remove file">&times;</button>
+            </div>
+
+            <!-- Feature Chips -->
+            <div class="feature-chips">
+                <span class="chip">&#10004; PDF + EPUB Support</span>
+                <span class="chip">&#10004; Natural AI Voices</span>
+                <span class="chip">&#10004; MP3 Export</span>
+            </div>
+
+            <div class="options">
+                <div class="option-group">
+                    <label for="voice-select">Voice</label>
+                    <select id="voice-select">
+                        <option value="">Loading voices...</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label for="speed-select">Speed</label>
+                    <select id="speed-select">
+                        <option value="-30%">0.7x (Slow)</option>
+                        <option value="-20%">0.8x</option>
+                        <option value="-10%">0.9x</option>
+                        <option value="+0%" selected>1.0x (Normal)</option>
+                        <option value="+10%">1.1x</option>
+                        <option value="+20%">1.2x</option>
+                        <option value="+30%">1.3x (Fast)</option>
+                        <option value="+50%">1.5x</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button id="test-voice-btn" class="btn-secondary">Test Reading Voice</button>
+                <button id="convert-btn" class="btn-primary" disabled>Convert to Audiobook</button>
+            </div>
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progress-section" class="hidden">
+            <div class="progress-bar-container">
+                <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+            </div>
+            <p id="progress-text" class="progress-text">Narrio is narrating your audiobook...</p>
+        </div>
+
+        <!-- Done Section -->
+        <div id="done-section" class="hidden">
+            <div class="done-icon">&#127881;</div>
+            <p class="done-text">Audiobook ready!</p>
+            <p class="done-subtext">Your narration is complete — time to hit play.</p>
+            <a id="download-btn" class="btn-primary" href="#" download>Download MP3</a>
+            <button id="reset-btn" class="btn-secondary">Convert Another</button>
+        </div>
+
+        <!-- Error Section -->
+        <div id="error-section" class="hidden">
+            <div class="error-icon">&#128546;</div>
+            <p id="error-text" class="error-text"></p>
+            <p class="error-hint">No worries — give it another shot!</p>
+            <button id="error-reset-btn" class="btn-secondary">Try Again</button>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

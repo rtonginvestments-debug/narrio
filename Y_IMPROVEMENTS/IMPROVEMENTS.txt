@@ -1,0 +1,156 @@
+You are Claude Code acting as a senior product designer + frontend UI engineer.
+
+GOAL
+Make the Narrio frontend significantly more aesthetically pleasing and polished, inspired by the original Mint.com style (pre-Intuit): calm, friendly, premium, modern SaaS. Keep the same Narrio logo color theme (blue → purple → mint gradient). Do NOT change any backend logic, routes, APIs, or functionality — this is a pure UI/UX + styling upgrade.
+
+CURRENT SCREEN
+Single-page converter UI: Narrio logo at top, short description, upload dropzone, voice + speed dropdowns, Convert button.
+
+STYLE DIRECTION (Mint.com-inspired)
+- Soft calming gradient background with subtle abstract blobs
+- Centered white “hero card” with premium shadow + rounded corners
+- Clear typography hierarchy (headline + helper text)
+- Friendly microcopy and buddy-like tone
+- Interactive upload zone with hover lift + soft glow
+- Primary CTA button with Narrio gradient + modern pill shape
+- Inputs and dropdowns should feel soft, rounded, and premium
+- Add subtle motion (hover transitions, gentle lift, progress shimmer)
+
+COLOR TOKENS (Keep Narrio Theme)
+- Background base: #F8FAFF
+- Card surface: #FFFFFF
+- Text primary: #111827
+- Text muted: #6B7280
+- Border: rgba(0,0,0,0.08)
+
+Brand Gradient:
+linear-gradient(90deg,
+  #3B82F6 0%,
+  #8B5CF6 50%,
+  #34D399 100%
+)
+
+Brand Colors:
+- Blue: #3B82F6
+- Purple: #8B5CF6
+- Mint: #34D399
+
+BACKGROUND UPGRADE (Mint Calm Wash)
+Replace flat background with soft radial gradients:
+
+background:
+  radial-gradient(circle at top left, rgba(59,130,246,0.12), transparent 60%),
+  radial-gradient(circle at bottom right, rgba(52,211,153,0.12), transparent 55%),
+  #F8FAFF;
+
+Add subtle decorative blobs/circles (very faint, like Mint).
+
+MAIN CARD UPGRADE (Premium Mint Container)
+The central container should feel more premium:
+
+- Border radius: 28–32px
+- Subtle border: 1px solid rgba(0,0,0,0.04)
+- Shadow:
+
+box-shadow:
+  0 0 0 1px rgba(59,130,246,0.05),
+  0 12px 40px rgba(15,23,42,0.10);
+
+TYPOGRAPHY + HERO HIERARCHY
+Add a real Mint-style headline above the upload:
+
+Headline (large, bold):
+“Turn PDFs & EPUBs Into Audiobooks Instantly”
+
+Subtext (muted):
+“Narrio helps you listen to your documents anywhere with natural AI voices.”
+
+Use Sora or Inter consistently:
+- Headings: font-weight 700
+- Body: font-weight 400–500
+- Slight negative letter spacing for polish
+
+UPLOAD DROPZONE (More Delightful + Interactive)
+Upgrade the drop area from plain dashed to Mint-like:
+
+- Rounded: 20px
+- Background tint: rgba(59,130,246,0.03)
+- Dashed border: 2px dashed rgba(59,130,246,0.35)
+- Hover effect:
+
+on hover:
+  background: rgba(59,130,246,0.06)
+  transform: translateY(-2px)
+  box-shadow: 0 8px 20px rgba(59,130,246,0.10)
+
+Add friendly copy:
+“Drop your book here — Narrio will start narrating 🎧”
+
+PRIMARY BUTTON (Mint-Level CTA)
+Replace muted gray button with strong Narrio gradient pill button:
+
+- Full width
+- Border radius: 999px
+- Gradient background (brand gradient)
+- White text, font-weight 600
+- Shadow:
+
+box-shadow: 0 6px 20px rgba(59,130,246,0.25)
+
+Hover:
+transform: translateY(-1px)
+box-shadow: 0 10px 28px rgba(59,130,246,0.35)
+
+INPUTS + DROPDOWNS (Soft Modern Controls)
+Dropdowns should look premium:
+
+- Border radius: 16px
+- Padding: 12–14px
+- Border: 1px solid rgba(0,0,0,0.08)
+
+Focus state:
+border-color: #3B82F6
+box-shadow: 0 0 0 4px rgba(59,130,246,0.15)
+
+FEATURE CHIPS (Mint Reassurance)
+Add small chips under upload:
+
+✔ PDF + EPUB Support
+✔ Natural AI Voices
+✔ MP3 Audiobook Export
+
+Chip style:
+- Rounded full
+- Background: rgba(52,211,153,0.10)
+- Font size: 0.85rem
+
+NARRIO BUDDY MICROCOPY (Human Touch)
+Add subtle friendly states:
+
+Empty:
+“Hi, I’m Narrio 👋 Upload a book and I’ll read it to you.”
+
+Loading:
+“Narrio is narrating your audiobook…”
+
+Success:
+“Audiobook ready! Want to download?”
+
+SUBTLE ANIMATIONS (Mint Polish)
+Add gentle transitions everywhere:
+- Buttons hover lift
+- Dropzone hover glow
+- Card fade-in on load
+- Progress shimmer while converting
+
+IMPLEMENTATION RULES
+- Do NOT touch backend logic
+- Only update UI components + styling
+- Prefer Tailwind if installed, otherwise CSS modules
+- Create reusable components if helpful:
+  Button, Card, Dropzone, Chip, Progress
+
+DELIVERABLE
+Return the updated UI implementation with Mint.com-level polish while keeping Narrio’s cute friendly brand + gradient theme.
+
+Now begin implementing these UI improvements directly in the codebase.
