@@ -11,5 +11,7 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 DEFAULT_VOICE = "en-US-AriaNeural"
 DEFAULT_RATE = "+0%"
 
+FREE_PAGE_LIMIT = 30
+
 # Auto-cleanup files older than this (seconds)
 CLEANUP_AGE = 3600  # 1 hour

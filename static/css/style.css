@@ -102,9 +102,18 @@ h1 {
     text-align: center;
     color: #6B7280;
     font-size: 0.95rem;
-    margin-bottom: 28px;
+    margin-bottom: 10px;
     line-height: 1.55;
     font-weight: 400;
+}
+
+.free-tier-note {
+    text-align: center;
+    font-size: 0.82rem;
+    color: #8B5CF6;
+    font-weight: 600;
+    margin-bottom: 28px;
+    line-height: 1.5;
 }
 
 /* --- Drop Zone --- */

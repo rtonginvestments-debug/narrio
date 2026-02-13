@@ -1,6 +1,11 @@
 import os
 import re
 
+import fitz
+import ebooklib
+from ebooklib import epub
+from docx import Document
+
 from .pdf_extractor import extract_pdf
 from .epub_extractor import extract_epub
 from .docx_extractor import extract_docx
@@ -37,6 +42,26 @@ def _clean_for_tts(text):
     text = (" " + TTS_PAUSE + " ").join(processed)
 
     return text
+
+
+def get_page_count(filepath):
+    """Return an estimated page count without doing full text extraction."""
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext == ".pdf":
+        with fitz.open(filepath) as doc:
+            return doc.page_count
+    elif ext == ".epub":
+        book = epub.read_epub(filepath, options={"ignore_ncx": True})
+        return sum(
+            1 for item in book.get_items()
+            if item.get_type() == ebooklib.ITEM_DOCUMENT
+        )
+    elif ext == ".docx":
+        doc = Document(filepath)
+        word_count = sum(len(p.text.split()) for p in doc.paragraphs)
+        return max(1, round(word_count / 250))
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
 
 
 def extract_text(filepath):

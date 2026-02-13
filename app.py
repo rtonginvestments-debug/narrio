@@ -8,8 +8,9 @@ import json
 from config import (
     UPLOAD_FOLDER, OUTPUT_FOLDER, ALLOWED_EXTENSIONS,
     MAX_FILE_SIZE, DEFAULT_VOICE, DEFAULT_RATE, CLEANUP_AGE,
+    FREE_PAGE_LIMIT,
 )
-from extractors import extract_text
+from extractors import extract_text, get_page_count
 from tts import get_voices, convert_to_speech
 
 app = Flask(__name__)
@@ -159,6 +160,19 @@ def api_convert():
     ext = file.filename.rsplit(".", 1)[1].lower()
     upload_path = os.path.join(UPLOAD_FOLDER, f"{job_id}.{ext}")
     file.save(upload_path)
+
+    # Enforce free-tier page limit
+    try:
+        page_count = get_page_count(upload_path)
+        if page_count > FREE_PAGE_LIMIT:
+            os.remove(upload_path)
+            return jsonify({
+                "error": f"This file has {page_count} pages, which exceeds the free limit of {FREE_PAGE_LIMIT} pages. Premium version with unlimited pages is coming soon!"
+            }), 400
+    except ValueError:
+        pass  # unsupported type already caught above
+    except Exception:
+        pass  # don't block conversion if page counting fails
 
     # Initialize job
     with jobs_lock:
