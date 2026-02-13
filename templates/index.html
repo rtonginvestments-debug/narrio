@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Narrio — PDF/EPUB to Audiobook</title>
+    <title>Narrio — PDF/EPUB/Word to Audiobook</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,7 +19,7 @@
         <div class="logo-header">
             <img src="/static/images/logo.png" alt="Narrio" class="logo">
         </div>
-        <h1>Turn PDFs & EPUBs Into Audiobooks Instantly</h1>
+        <h1>Turn PDFs, EPUBs & Word Docs Into Audiobooks Instantly</h1>
         <p class="subtitle">Narrio helps you listen to your documents anywhere with natural AI voices.</p>
 
         <!-- Upload Section -->
@@ -27,8 +27,8 @@
             <div id="drop-zone" class="drop-zone">
                 <div class="drop-zone-icon">&#127911;</div>
                 <p>Drop your book here — Narrio will start narrating</p>
-                <p class="drop-zone-hint">or click to browse for a PDF or EPUB</p>
-                <input type="file" id="file-input" accept=".pdf,.epub" hidden>
+                <p class="drop-zone-hint">or click to browse for a PDF, EPUB, or Word file</p>
+                <input type="file" id="file-input" accept=".pdf,.epub,.docx" hidden>
             </div>
 
             <div id="file-info" class="file-info hidden">
@@ -38,7 +38,7 @@
 
             <!-- Feature Chips -->
             <div class="feature-chips">
-                <span class="chip">&#10004; PDF + EPUB Support</span>
+                <span class="chip">&#10004; PDF + EPUB + Word</span>
                 <span class="chip">&#10004; Natural AI Voices</span>
                 <span class="chip">&#10004; MP3 Export</span>
             </div>

@@ -3,6 +3,7 @@ import re
 
 from .pdf_extractor import extract_pdf
 from .epub_extractor import extract_epub
+from .docx_extractor import extract_docx
 
 # Marker injected between paragraphs; the TTS engine splits on it and
 # writes silent MP3 frames to produce a real audible pause.
@@ -45,6 +46,8 @@ def extract_text(filepath):
         raw = extract_pdf(filepath)
     elif ext == ".epub":
         raw = extract_epub(filepath)
+    elif ext == ".docx":
+        raw = extract_docx(filepath)
     else:
         raise ValueError(f"Unsupported file type: {ext}")
     return _clean_for_tts(raw)

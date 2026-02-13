@@ -73,8 +73,8 @@ fileInput.addEventListener("change", () => {
 
 function handleFile(file) {
     const ext = file.name.split(".").pop().toLowerCase();
-    if (!["pdf", "epub"].includes(ext)) {
-        showError("Only PDF and EPUB files are supported.");
+    if (!["pdf", "epub", "docx"].includes(ext)) {
+        showError("Only PDF, EPUB, and Word (.docx) files are supported.");
         return;
     }
     if (file.size > 50 * 1024 * 1024) {
