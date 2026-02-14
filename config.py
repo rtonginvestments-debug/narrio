@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -15,3 +18,9 @@ FREE_PAGE_LIMIT = 30
 
 # Auto-cleanup files older than this (seconds)
 CLEANUP_AGE = 3600  # 1 hour
+
+# Clerk Authentication
+CLERK_PUBLISHABLE_KEY = os.getenv("CLERK_PUBLISHABLE_KEY", "")
+CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY", "")
+CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")

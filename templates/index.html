@@ -15,13 +15,33 @@
     <div class="blob blob-2"></div>
     <div class="blob blob-3"></div>
 
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div id="auth-section" class="auth-section">
+            <div id="user-info" class="user-info hidden">
+                <div class="user-avatar" id="user-avatar"></div>
+                <span id="user-name" class="user-name"></span>
+                <span id="user-badge" class="premium-badge hidden">Pro</span>
+                <button id="sign-out-btn" class="nav-btn-text">Sign Out</button>
+            </div>
+            <div id="auth-buttons" class="auth-buttons">
+                <button id="sign-in-btn" class="nav-btn-text">Sign In</button>
+                <button id="sign-up-btn" class="nav-btn-premium">Get Premium</button>
+            </div>
+        </div>
+    </nav>
+
     <div class="container">
         <div class="logo-header">
             <img src="/static/images/logo.png" alt="Narrio" class="logo">
         </div>
+
         <h1>Turn Your Files Into Audiobooks Instantly</h1>
         <p class="subtitle">Upload a PDF, EPUB, or Word document and Narrio will turn it into a spoken, downloadable MP3 using natural AI voices.</p>
-        <p class="free-tier-note">Free version — upload up to 30 pages at a time. Premium version with unlimited uploads coming soon!</p>
+        <p class="free-tier-note" id="tier-note">
+            Free version — upload up to 30 pages at a time.
+            <span id="premium-upgrade-link" class="premium-link hidden">Get Premium for unlimited pages!</span>
+        </p>
 
         <!-- Upload Section -->
         <div id="upload-section">
@@ -35,6 +55,23 @@
             <div id="file-info" class="file-info hidden">
                 <span id="file-name"></span>
                 <button id="clear-file" class="btn-icon" title="Remove file">&times;</button>
+            </div>
+
+            <div id="segment-option" class="hidden">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="ebook-checkbox">
+                    This is an ebook
+                </label>
+                <div id="segment-type-options" class="segment-type-options hidden">
+                    <label class="radio-label">
+                        <input type="radio" name="segment-type" id="auto-segment-radio" value="auto" checked>
+                        Auto-segment into chapters
+                    </label>
+                    <label class="radio-label" id="manual-segment-radio-label">
+                        <input type="radio" name="segment-type" id="manual-segment-radio" value="manual">
+                        Manually assign chapters
+                    </label>
+                </div>
             </div>
 
             <!-- Feature Chips -->
@@ -72,12 +109,61 @@
             </div>
         </div>
 
+        <!-- Confirm Section (estimate before converting) -->
+        <div id="confirm-section" class="hidden">
+            <h2>Ready to convert</h2>
+            <p id="confirm-filename" class="confirm-detail"></p>
+            <p id="confirm-estimate" class="confirm-detail"></p>
+            <div class="btn-row">
+                <button id="confirm-convert-btn" class="btn-primary">Convert to Audiobook</button>
+                <button id="confirm-back-btn" class="btn-secondary">Back</button>
+            </div>
+        </div>
+
+        <!-- Chapters Section (Premium chapter-based conversion) -->
+        <div id="chapters-section" class="hidden">
+            <div class="chapters-header">
+                <h2 id="chapters-book-title"></h2>
+                <p id="chapters-count" class="chapters-count"></p>
+                <p id="chapters-detection-note" class="chapters-detection-note hidden"></p>
+            </div>
+            <div id="chapters-overall-progress" class="hidden">
+                <div class="progress-bar-container">
+                    <div id="chapters-overall-bar" class="progress-bar" style="width: 0%"></div>
+                </div>
+                <p id="chapters-overall-text" class="progress-text"></p>
+            </div>
+            <div id="chapters-list" class="chapters-list"></div>
+            <div class="chapters-btn-group">
+                <button id="convert-all-btn" class="btn-primary">Convert All Chapters</button>
+                <button id="switch-to-manual-btn" class="btn-secondary">Manually Assign Chapters Instead</button>
+                <button id="chapters-back-btn" class="btn-secondary">Back to Upload</button>
+            </div>
+        </div>
+
+        <!-- Manual Segment Section -->
+        <div id="manual-segment-section" class="hidden">
+            <div class="manual-segment-header">
+                <h2>Manually Assign Chapters</h2>
+                <p id="manual-segment-subtitle" class="manual-segment-subtitle"></p>
+            </div>
+            <div id="manual-segment-rows" class="manual-segment-rows"></div>
+            <button id="add-row-btn" class="btn-secondary" style="margin-top: 10px;">+ Add Row</button>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button id="manual-submit-btn" class="btn-primary">Create Segments</button>
+                <button id="manual-back-btn" class="btn-secondary">Back</button>
+            </div>
+        </div>
+
         <!-- Progress Section -->
         <div id="progress-section" class="hidden">
             <div class="progress-bar-container">
                 <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
             </div>
             <p id="progress-text" class="progress-text">Narrio is narrating your audiobook...</p>
+            <div id="progress-controls" class="progress-controls hidden">
+                <button id="cancel-btn" class="btn-cancel">Cancel Conversion</button>
+            </div>
         </div>
 
         <!-- Done Section -->

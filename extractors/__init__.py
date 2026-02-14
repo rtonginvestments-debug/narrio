@@ -9,6 +9,7 @@ from docx import Document
 from .pdf_extractor import extract_pdf
 from .epub_extractor import extract_epub
 from .docx_extractor import extract_docx
+from .chapter_splitter import extract_chapters_pdf, extract_chapters_epub
 
 # Marker injected between paragraphs; the TTS engine splits on it and
 # writes silent MP3 frames to produce a real audible pause.
@@ -76,3 +77,34 @@ def extract_text(filepath):
     else:
         raise ValueError(f"Unsupported file type: {ext}")
     return _clean_for_tts(raw)
+
+
+def extract_chapters(filepath):
+    """Extract chapters from a PDF or EPUB file.
+
+    Returns:
+        (chapters, detection_method) where each chapter is a dict with keys:
+            index, section_type, chapter_number, title, chapter_label,
+            text, text_clean, page_start, page_end, word_count, estimated_minutes
+        detection_method is "toc", "headings", "auto_sections", or "epub_spine"
+
+    Raises ValueError for unsupported file types (e.g. DOCX).
+    """
+    ext = os.path.splitext(filepath)[1].lower()
+
+    if ext == ".pdf":
+        chapters, method = extract_chapters_pdf(filepath)
+    elif ext == ".epub":
+        chapters, method = extract_chapters_epub(filepath)
+    else:
+        raise ValueError(
+            f"Chapter detection is not supported for {ext} files. "
+            "Only PDF and EPUB are supported."
+        )
+
+    # Post-process: clean text for TTS, add estimates
+    for ch in chapters:
+        ch["text_clean"] = _clean_for_tts(ch["text"])
+        ch["estimated_minutes"] = round(ch["word_count"] / 150, 1)
+
+    return chapters, method
