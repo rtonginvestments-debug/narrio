@@ -363,12 +363,7 @@ function handleFile(file) {
         segmentTypeOptions.classList.add("hidden");
         autoSegmentRadio.checked = true;
 
-        // Manual segment only available for PDF (EPUBs have no page numbers)
-        if (ext === "epub") {
-            manualSegmentRadioLabel.classList.add("hidden");
-        } else {
-            manualSegmentRadioLabel.classList.remove("hidden");
-        }
+        manualSegmentRadioLabel.classList.remove("hidden");
     } else {
         segmentOption.classList.add("hidden");
         ebookCheckbox.checked = false;
@@ -1109,8 +1104,12 @@ async function prepareManualSegment() {
 }
 
 function showManualSegmentForm() {
+    const ext = selectedFile ? selectedFile.name.split(".").pop().toLowerCase() : "";
+    const isEpub = ext === "epub";
+    const unitLabel = isEpub ? "sections" : "pages";
+
     manualSegmentSubtitle.textContent = currentPageCount
-        ? `This PDF has ${currentPageCount} pages. Define your chapter ranges below.`
+        ? `This file has ${currentPageCount} ${unitLabel}. Define your chapter ranges below.`
         : "Define your chapter ranges below.";
 
     manualSegmentRows.innerHTML = "";
@@ -1127,11 +1126,14 @@ function addManualRow() {
     row.className = "manual-segment-row";
 
     const maxPage = currentPageCount || 9999;
+    const ext = selectedFile ? selectedFile.name.split(".").pop().toLowerCase() : "";
+    const startLabel = ext === "epub" ? "Start section" : "Start page";
+    const endLabel = ext === "epub" ? "End section" : "End page";
 
     row.innerHTML = `
         <input type="text" class="segment-name-input" placeholder="Chapter name" maxlength="100">
-        <input type="number" class="segment-page-input" placeholder="Start page" min="1" max="${maxPage}">
-        <input type="number" class="segment-page-input" placeholder="End page" min="1" max="${maxPage}">
+        <input type="number" class="segment-page-input" placeholder="${startLabel}" min="1" max="${maxPage}">
+        <input type="number" class="segment-page-input" placeholder="${endLabel}" min="1" max="${maxPage}">
         <button type="button" class="btn-remove-row" title="Remove row">&times;</button>
     `;
 

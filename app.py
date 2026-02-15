@@ -480,11 +480,7 @@ def api_analyze():
     file.save(upload_path)
 
     if segments_json:
-        # --- Manual segment mode ---
-        if ext != "pdf":
-            os.remove(upload_path)
-            return jsonify({"error": "Manual chapter assignment is only supported for PDF files."}), 400
-
+        # --- Manual segment mode (PDF and EPUB) ---
         try:
             segments = json.loads(segments_json)
         except (json.JSONDecodeError, TypeError):
@@ -496,44 +492,78 @@ def api_analyze():
             return jsonify({"error": "At least one segment is required."}), 400
 
         try:
-            import fitz as manual_fitz
             from extractors import _clean_for_tts
-            from extractors.chapter_splitter import _pages_text
 
-            doc = manual_fitz.open(upload_path)
-            total_pages = doc.page_count
+            if ext == "pdf":
+                import fitz as manual_fitz
+                from extractors.chapter_splitter import _pages_text
+
+                doc = manual_fitz.open(upload_path)
+                total_items = doc.page_count
+                unit_label = "pages"
+            else:
+                # EPUB — get spine items
+                import ebooklib
+                from ebooklib import epub as epub_lib
+                from bs4 import BeautifulSoup as BS4
+
+                epub_book = epub_lib.read_epub(upload_path, options={"ignore_ncx": True})
+                spine_items = [
+                    item for item in epub_book.get_items()
+                    if item.get_type() == ebooklib.ITEM_DOCUMENT
+                ]
+                total_items = len(spine_items)
+                unit_label = "sections"
 
             chapters = []
             for i, seg in enumerate(segments):
                 name = seg.get("name", "").strip()
-                start_page = seg.get("start_page")
-                end_page = seg.get("end_page")
+                start_idx = seg.get("start_page")
+                end_idx = seg.get("end_page")
 
-                if not name or start_page is None or end_page is None:
-                    doc.close()
+                if not name or start_idx is None or end_idx is None:
+                    if ext == "pdf":
+                        doc.close()
                     os.remove(upload_path)
                     return jsonify({"error": f"Segment {i+1}: all fields are required."}), 400
 
-                start_page = int(start_page)
-                end_page = int(end_page)
+                start_idx = int(start_idx)
+                end_idx = int(end_idx)
 
-                if start_page < 1 or end_page < 1:
-                    doc.close()
+                if start_idx < 1 or end_idx < 1:
+                    if ext == "pdf":
+                        doc.close()
                     os.remove(upload_path)
-                    return jsonify({"error": f"Segment {i+1}: page numbers must be at least 1."}), 400
+                    return jsonify({"error": f"Segment {i+1}: values must be at least 1."}), 400
 
-                if start_page > total_pages or end_page > total_pages:
-                    doc.close()
+                if start_idx > total_items or end_idx > total_items:
+                    if ext == "pdf":
+                        doc.close()
                     os.remove(upload_path)
-                    return jsonify({"error": f"Segment {i+1}: page numbers exceed document length ({total_pages} pages)."}), 400
+                    return jsonify({"error": f"Segment {i+1}: values exceed document length ({total_items} {unit_label})."}), 400
 
-                if start_page > end_page:
-                    doc.close()
+                if start_idx > end_idx:
+                    if ext == "pdf":
+                        doc.close()
                     os.remove(upload_path)
-                    return jsonify({"error": f"Segment {i+1}: start page cannot be greater than end page."}), 400
+                    return jsonify({"error": f"Segment {i+1}: start cannot be greater than end."}), 400
 
-                # Extract text (0-indexed: start-1 to end)
-                raw_text = _pages_text(doc, start_page - 1, end_page)
+                # Extract text based on file type
+                if ext == "pdf":
+                    raw_text = _pages_text(doc, start_idx - 1, end_idx)
+                else:
+                    # EPUB: extract text from spine items in range (1-indexed to 0-indexed)
+                    texts = []
+                    for si in range(start_idx - 1, end_idx):
+                        item = spine_items[si]
+                        html = item.get_content().decode("utf-8", errors="ignore")
+                        soup = BS4(html, "html.parser")
+                        for tag in soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "div"]):
+                            t = tag.get_text(separator=" ", strip=True)
+                            if t:
+                                texts.append(t)
+                    raw_text = "\n\n".join(texts)
+
                 text_clean = _clean_for_tts(raw_text)
                 word_count = len(raw_text.split())
 
@@ -545,13 +575,14 @@ def api_analyze():
                     "chapter_label": "",
                     "text": raw_text,
                     "text_clean": text_clean,
-                    "page_start": start_page,
-                    "page_end": end_page,
+                    "page_start": start_idx,
+                    "page_end": end_idx,
                     "word_count": word_count,
                     "estimated_minutes": round(word_count / 150, 1),
                 })
 
-            doc.close()
+            if ext == "pdf":
+                doc.close()
             detection_method = "manual"
 
         except ValueError as e:
