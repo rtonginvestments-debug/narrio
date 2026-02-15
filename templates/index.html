@@ -155,6 +155,65 @@
             </div>
         </div>
 
+        <!-- Auto Segment Section (EPUB and PDF) -->
+        <div id="epub-segment-section" class="hidden">
+            <div class="epub-segment-header">
+                <h2 id="auto-segment-title">Manually Assign Sections</h2>
+                <p class="epub-segment-subtitle">Choose how to split this file into audio segments.</p>
+            </div>
+
+            <div class="epub-stats-row">
+                <div class="epub-stat">
+                    <div class="epub-stat-value" id="epub-stat-words">—</div>
+                    <div class="epub-stat-label">Words</div>
+                </div>
+                <div class="epub-stat">
+                    <div class="epub-stat-value" id="epub-stat-pages">—</div>
+                    <div class="epub-stat-label">Approx. Pages</div>
+                </div>
+                <div class="epub-stat">
+                    <div class="epub-stat-value" id="epub-stat-audio">—</div>
+                    <div class="epub-stat-label">Est. Audio Length</div>
+                </div>
+            </div>
+
+            <div class="epub-segment-methods">
+                <label class="radio-label">
+                    <input type="radio" name="epub-seg-method" id="seg-method-audio" value="audio_length" checked>
+                    By audio clip length
+                </label>
+                <div class="epub-segment-suboption" id="suboption-audio">
+                    <label for="seg-audio-minutes">Minutes per segment:</label>
+                    <select id="seg-audio-minutes" class="epub-segment-select">
+                        <option value="5">5 minutes</option>
+                        <option value="10">10 minutes</option>
+                        <option value="15" selected>15 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="60">60 minutes</option>
+                    </select>
+                </div>
+
+                <label class="radio-label">
+                    <input type="radio" name="epub-seg-method" id="seg-method-pages" value="page_count">
+                    By approximate page count
+                </label>
+                <div class="epub-segment-suboption hidden" id="suboption-pages">
+                    <label for="seg-page-count">Pages per segment:</label>
+                    <input type="number" id="seg-page-count" class="epub-segment-select" min="1" value="20" placeholder="Pages per segment">
+                </div>
+
+                <label class="radio-label hidden" id="seg-method-ranges-label">
+                    <input type="radio" name="epub-seg-method" id="seg-method-ranges" value="page_ranges">
+                    By page ranges (start &amp; end page)
+                </label>
+            </div>
+
+            <div class="btn-row" style="margin-top: 16px;">
+                <button id="epub-segment-submit-btn" class="btn-primary">Create Segments</button>
+                <button id="epub-segment-back-btn" class="btn-secondary">Back</button>
+            </div>
+        </div>
+
         <!-- Progress Section -->
         <div id="progress-section" class="hidden">
             <div class="progress-bar-container">
@@ -175,11 +234,46 @@
             <button id="reset-btn" class="btn-secondary">Convert Another</button>
         </div>
 
+        <!-- Premium Trial Section -->
+        <div id="premium-trial-section" class="hidden">
+            <div class="premium-trial-header">
+                <div class="premium-trial-icon">&#9889;</div>
+                <h2>Welcome to Narrio Pro</h2>
+                <p class="premium-trial-subtitle">Unlock the full power of Narrio with your free 3-day trial.</p>
+            </div>
+            <div class="premium-trial-features">
+                <div class="premium-feature-item">
+                    <span class="premium-feature-check">&#10004;</span>
+                    <span>Upload files with <strong>unlimited page counts</strong></span>
+                </div>
+                <div class="premium-feature-item">
+                    <span class="premium-feature-check">&#10004;</span>
+                    <span><strong>Auto-segment</strong> ebooks into chapters</span>
+                </div>
+                <div class="premium-feature-item">
+                    <span class="premium-feature-check">&#10004;</span>
+                    <span>Customize segments by <strong>audio length or page count</strong></span>
+                </div>
+                <div class="premium-feature-item">
+                    <span class="premium-feature-check">&#10004;</span>
+                    <span>Download <strong>individual chapter MP3s</strong></span>
+                </div>
+                <div class="premium-feature-item">
+                    <span class="premium-feature-check">&#10004;</span>
+                    <span>More <strong>advanced features</strong> coming soon</span>
+                </div>
+            </div>
+            <p class="premium-trial-pricing">Then just <strong>$2.49/mo</strong> after your trial ends.</p>
+            <button id="activate-trial-btn" class="btn-primary">Start 3-Day Trial (No Payment Needed)</button>
+            <button id="trial-back-btn" class="btn-secondary">Maybe Later</button>
+        </div>
+
         <!-- Error Section -->
         <div id="error-section" class="hidden">
             <div class="error-icon">&#128546;</div>
             <p id="error-text" class="error-text"></p>
-            <p class="error-hint">No worries — give it another shot!</p>
+            <p id="error-hint" class="error-hint">No worries — give it another shot!</p>
+            <button id="error-premium-btn" class="btn-primary hidden">Try Premium Today</button>
             <button id="error-reset-btn" class="btn-secondary">Try Again</button>
         </div>
     </div>

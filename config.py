@@ -9,7 +9,7 @@ UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "output")
 
 ALLOWED_EXTENSIONS = {"pdf", "epub", "docx"}
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+MAX_FILE_SIZE = 150 * 1024 * 1024  # 150 MB
 
 DEFAULT_VOICE = "en-US-AriaNeural"
 DEFAULT_RATE = "+0%"

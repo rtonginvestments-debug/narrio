@@ -84,6 +84,24 @@ let chapterJobs = {};  // {chapterIndex: {jobId, status, eventSource}}
 let currentPageCount = null;
 let currentFileForManual = null;
 
+// EPUB segment state
+let currentWordCount = null;
+let currentEstimatedAudioMinutes = null;
+
+// EPUB segment elements
+const epubSegmentSection = document.getElementById("epub-segment-section");
+const segMethodAudio = document.getElementById("seg-method-audio");
+const segMethodPages = document.getElementById("seg-method-pages");
+const suboptionAudio = document.getElementById("suboption-audio");
+const suboptionPages = document.getElementById("suboption-pages");
+const segAudioMinutes = document.getElementById("seg-audio-minutes");
+const segPageCount = document.getElementById("seg-page-count");
+const epubSegmentSubmitBtn = document.getElementById("epub-segment-submit-btn");
+const epubSegmentBackBtn = document.getElementById("epub-segment-back-btn");
+const segMethodRanges = document.getElementById("seg-method-ranges");
+const segMethodRangesLabel = document.getElementById("seg-method-ranges-label");
+const autoSegmentTitle = document.getElementById("auto-segment-title");
+
 // Active conversion state (for cancel)
 let activeJobId = null;
 let activeEventSource = null;
@@ -155,11 +173,32 @@ async function initClerk() {
 
         console.log("Clerk fully loaded and ready!");
 
+        // Listen for auth state changes (e.g. after sign-up during trial flow)
+        clerk.addListener(({ user }) => {
+            if (user) {
+                currentUser = user;
+                showUserInfo();
+                if (sessionStorage.getItem("pendingTrialFlow")) {
+                    sessionStorage.removeItem("pendingTrialFlow");
+                    showPremiumTrialPage();
+                }
+            } else {
+                currentUser = null;
+                showAuthButtons();
+            }
+        });
+
         // Check initial auth state
         if (clerk.user) {
             console.log("User already signed in:", clerk.user);
             currentUser = clerk.user;
             showUserInfo();
+
+            // Check if we need to show trial page after a sign-up redirect
+            if (sessionStorage.getItem("pendingTrialFlow")) {
+                sessionStorage.removeItem("pendingTrialFlow");
+                showPremiumTrialPage();
+            }
         } else {
             console.log("No user signed in");
             showAuthButtons();
@@ -253,14 +292,21 @@ function showPremiumModal() {
     // Create modal content
     overlay.innerHTML = `
         <div class="modal-content">
-            <div class="modal-icon">✨</div>
-            <h2 class="modal-title">Thanks for Your Interest in Narrio Pro!</h2>
-            <p class="modal-message">
-                Premium is coming soon with exciting features including unlimited page uploading,
-                ebook chapter audio categorization and downloads. Stay tuned for updates!
-            </p>
-            <button class="modal-close-btn" onclick="this.closest('.modal-overlay').remove()">
-                Got It!
+            <div class="modal-icon">&#9889;</div>
+            <h2 class="modal-title">Upgrade to Narrio Pro</h2>
+            <ul class="modal-features">
+                <li>Upload files with unlimited page counts</li>
+                <li>Auto-segment ebooks into chapters</li>
+                <li>Customize audio segments by length or page count</li>
+                <li>Download individual chapter MP3s</li>
+                <li>More advanced features coming soon</li>
+            </ul>
+            <p class="modal-pricing">All for just <strong>$2.49/mo</strong></p>
+            <button class="modal-cta-btn" id="modal-start-trial-btn">
+                Start Free 3-Day Trial
+            </button>
+            <button class="modal-close-link" onclick="this.closest('.modal-overlay').remove()">
+                Maybe later
             </button>
         </div>
     `;
@@ -273,6 +319,47 @@ function showPremiumModal() {
     });
 
     document.body.appendChild(overlay);
+
+    // Bind trial button
+    document.getElementById("modal-start-trial-btn").addEventListener("click", () => {
+        overlay.remove();
+        startTrialFlow();
+    });
+}
+
+function showEbookPremiumModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    overlay.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-icon">&#127911;</div>
+            <h2 class="modal-title">Chapter Segmentation is a Premium Feature</h2>
+            <p class="modal-message">
+                Splitting your audiobooks into chapters or sections is available exclusively
+                to Narrio Pro members. Upgrade to unlock this feature, enjoy unlimited page
+                uploads, and access other advanced tools.
+            </p>
+            <p class="modal-pricing">All for just <strong>$2.49/mo</strong></p>
+            <button class="modal-cta-btn" id="modal-ebook-trial-btn">
+                Start Free 3-Day Trial
+            </button>
+            <button class="modal-close-link" onclick="this.closest('.modal-overlay').remove()">
+                Maybe later
+            </button>
+        </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
+
+    document.body.appendChild(overlay);
+
+    document.getElementById("modal-ebook-trial-btn").addEventListener("click", () => {
+        overlay.remove();
+        startTrialFlow();
+    });
 }
 
 async function showSignUp() {
@@ -289,6 +376,125 @@ async function signOut() {
         console.error("Sign out error:", err);
     }
 }
+
+// --- Premium Trial Flow ---
+
+const premiumTrialSection = document.getElementById("premium-trial-section");
+const activateTrialBtn = document.getElementById("activate-trial-btn");
+const trialBackBtn = document.getElementById("trial-back-btn");
+
+function startTrialFlow() {
+    if (!clerk) {
+        console.error("Clerk not initialized");
+        return;
+    }
+
+    // If user is already signed in, go straight to the features page
+    if (clerk.user) {
+        showPremiumTrialPage();
+        return;
+    }
+
+    // Persist flag so it survives page reloads after Clerk sign-up
+    sessionStorage.setItem("pendingTrialFlow", "1");
+    clerk.openSignUp();
+}
+
+function showPremiumTrialPage() {
+    // Hide all other sections
+    uploadSection.classList.add("hidden");
+    progressSection.classList.add("hidden");
+    doneSection.classList.add("hidden");
+    confirmSection.classList.add("hidden");
+    if (chaptersSection) chaptersSection.classList.add("hidden");
+    manualSegmentSection.classList.add("hidden");
+    epubSegmentSection.classList.add("hidden");
+    errorSection.classList.add("hidden");
+
+    premiumTrialSection.classList.remove("hidden");
+}
+
+function showTrialWelcomeModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    overlay.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-icon">&#127881;</div>
+            <h2 class="modal-title">Congratulations!</h2>
+            <p class="modal-message">
+                You've been upgraded to <strong>Narrio Pro</strong>! You have
+                <strong>3 days</strong> to enjoy unlimited access to all premium features:
+            </p>
+            <ul class="modal-features">
+                <li>Unlimited page caps per document</li>
+                <li>Auto chapter segmentation</li>
+                <li>Manual segmentation by audio length or pages</li>
+                <li>Individual chapter MP3 downloads</li>
+            </ul>
+            <p class="modal-pricing">
+                Enroll in Premium for only <strong>$2.49/mo</strong>!<br>
+                <span style="font-size: 0.85rem;">Additional advanced features upcoming weekly!</span>
+            </p>
+            <button class="modal-cta-btn" id="trial-welcome-close-btn">
+                Start Exploring
+            </button>
+        </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+            window.location.reload();
+        }
+    });
+
+    document.body.appendChild(overlay);
+
+    document.getElementById("trial-welcome-close-btn").addEventListener("click", () => {
+        overlay.remove();
+        window.location.reload();
+    });
+}
+
+activateTrialBtn.addEventListener("click", async () => {
+    activateTrialBtn.disabled = true;
+    activateTrialBtn.textContent = "Activating...";
+
+    try {
+        const headers = await getAuthHeaders();
+        headers["Content-Type"] = "application/json";
+
+        const res = await fetch("/api/start-trial", {
+            method: "POST",
+            headers: headers,
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            premiumTrialSection.classList.add("hidden");
+            showError(data.error);
+            activateTrialBtn.disabled = false;
+            activateTrialBtn.textContent = "Start 3-Day Trial (No Payment Needed)";
+            return;
+        }
+
+        // Success — show welcome modal, then reload
+        showTrialWelcomeModal();
+    } catch (err) {
+        console.error("Trial activation error:", err);
+        activateTrialBtn.textContent = "Something went wrong. Try again.";
+        setTimeout(() => {
+            activateTrialBtn.disabled = false;
+            activateTrialBtn.textContent = "Start 3-Day Trial (No Payment Needed)";
+        }, 3000);
+    }
+});
+
+trialBackBtn.addEventListener("click", () => {
+    premiumTrialSection.classList.add("hidden");
+    uploadSection.classList.remove("hidden");
+});
 
 // Load voices on startup
 async function loadVoices() {
@@ -346,8 +552,8 @@ function handleFile(file) {
         showError("Only PDF, EPUB, and Word (.docx) files are supported.");
         return;
     }
-    if (file.size > 50 * 1024 * 1024) {
-        showError("File is too large. Maximum size is 50 MB.");
+    if (file.size > 150 * 1024 * 1024) {
+        showError("File is too large. Maximum size is 150 MB.");
         return;
     }
     selectedFile = file;
@@ -422,7 +628,7 @@ convertBtn.addEventListener("click", async () => {
     if (ebookCheckbox.checked) {
         // Ebook mode — premium only
         if (!isPremiumUser()) {
-            showPremiumModal();
+            showEbookPremiumModal();
             return;
         }
 
@@ -461,11 +667,7 @@ async function estimateAndConfirm() {
         progressSection.classList.add("hidden");
 
         if (data.error) {
-            if (data.requiresPremium && !currentUser) {
-                showError(data.error + " Sign in to get Premium access!");
-            } else {
-                showError(data.error);
-            }
+            showError(data.error, data.requiresPremium);
             return;
         }
 
@@ -540,13 +742,7 @@ async function startSingleConversion() {
         const data = await res.json();
 
         if (data.error) {
-            if (data.requiresPremium && !currentUser) {
-                showError(data.error + " Sign in to get Premium access!");
-            } else if (data.requiresPremium && currentUser) {
-                showError(data.error);
-            } else {
-                showError(data.error);
-            }
+            showError(data.error, data.requiresPremium);
             return;
         }
 
@@ -703,7 +899,13 @@ function showChapterList(bookData) {
     // Set header — show full title without file extension
     const bookTitle = bookData.filename.replace(/\.[^.]+$/, "");
     chaptersBookTitle.textContent = bookTitle;
-    chaptersCount.textContent = `${bookData.chapter_count} chapter${bookData.chapter_count !== 1 ? "s" : ""} detected`;
+    const ext = selectedFile ? selectedFile.name.split(".").pop().toLowerCase() : "";
+    const isEpubManual = ext === "epub" && bookData.detection_method === "manual";
+    if (isEpubManual) {
+        chaptersCount.textContent = `${bookData.chapter_count} section${bookData.chapter_count !== 1 ? "s" : ""} generated`;
+    } else {
+        chaptersCount.textContent = `${bookData.chapter_count} chapter${bookData.chapter_count !== 1 ? "s" : ""} detected`;
+    }
 
     // Show detection note for auto-sections
     if (bookData.detection_method === "auto_sections") {
@@ -751,10 +953,19 @@ function showChapterList(bookData) {
     // Hide overall progress
     chaptersOverallProgress.classList.add("hidden");
 
-    // Show "switch to manual" button only for PDF files
-    const ext = selectedFile ? selectedFile.name.split(".").pop().toLowerCase() : "";
-    if (ext === "pdf") {
+    // Show "switch to manual" button for PDF and EPUB files
+    if (ext === "pdf" || ext === "epub") {
         switchToManualBtn.classList.remove("hidden");
+        if (ext === "epub") {
+            switchToManualBtn.textContent = isEpubManual
+                ? "Manually Reassign Sections"
+                : "Manually Assign Sections Instead";
+        } else {
+            const isPdfManual = bookData.detection_method === "manual";
+            switchToManualBtn.textContent = isPdfManual
+                ? "Manually Reassign Chapters"
+                : "Manually Assign Chapters Instead";
+        }
     } else {
         switchToManualBtn.classList.add("hidden");
     }
@@ -1096,11 +1307,57 @@ async function prepareManualSegment() {
 
         currentPageCount = data.page_count || 0;
         currentFileForManual = selectedFile;
-        showManualSegmentForm();
+        currentWordCount = data.word_count || 0;
+        currentEstimatedAudioMinutes = data.estimated_audio_minutes || 0;
+
+        // Route to segment form for both EPUB and PDF
+        showEpubSegmentForm();
     } catch (err) {
         progressSection.classList.add("hidden");
         showError("Failed to get page count. Please try again.");
     }
+}
+
+function showEpubSegmentForm() {
+    const wordCount = currentWordCount || 0;
+    const approxPages = Math.round(wordCount / 250);
+    const audioMinutes = currentEstimatedAudioMinutes || 0;
+    const fileExt = selectedFile ? selectedFile.name.split(".").pop().toLowerCase() : "";
+
+    // Format audio length
+    let audioStr;
+    if (audioMinutes >= 60) {
+        const h = Math.floor(audioMinutes / 60);
+        const m = Math.round(audioMinutes % 60);
+        audioStr = m > 0 ? `${h}h ${m}m` : `${h}h`;
+    } else {
+        audioStr = `${Math.round(audioMinutes)} min`;
+    }
+
+    // Set title based on file type
+    autoSegmentTitle.textContent = fileExt === "epub"
+        ? "Manually Assign Sections"
+        : "Manually Assign Chapters";
+
+    // Populate stats
+    document.getElementById("epub-stat-words").textContent = wordCount.toLocaleString();
+    document.getElementById("epub-stat-pages").textContent = approxPages.toLocaleString();
+    document.getElementById("epub-stat-audio").textContent = audioStr;
+
+    // Reset radio to audio length
+    segMethodAudio.checked = true;
+    suboptionAudio.classList.remove("hidden");
+    suboptionPages.classList.add("hidden");
+    segAudioMinutes.value = "15";
+
+    // Show "By page ranges" option only for PDFs
+    if (fileExt === "pdf") {
+        segMethodRangesLabel.classList.remove("hidden");
+    } else {
+        segMethodRangesLabel.classList.add("hidden");
+    }
+
+    epubSegmentSection.classList.remove("hidden");
 }
 
 function showManualSegmentForm() {
@@ -1255,20 +1512,107 @@ manualBackBtn.addEventListener("click", () => {
     uploadSection.classList.remove("hidden");
 });
 
-// Switch from auto results to manual segment
-switchToManualBtn.addEventListener("click", async () => {
-    chaptersSection.classList.add("hidden");
+// --- EPUB Segment Event Listeners ---
 
-    // If we already have a page count, go straight to the form
-    if (currentPageCount) {
+// Radio toggle: show/hide suboptions
+segMethodAudio.addEventListener("change", () => {
+    suboptionAudio.classList.remove("hidden");
+    suboptionPages.classList.add("hidden");
+});
+
+segMethodPages.addEventListener("change", () => {
+    suboptionAudio.classList.add("hidden");
+    suboptionPages.classList.remove("hidden");
+});
+
+segMethodRanges.addEventListener("change", () => {
+    suboptionAudio.classList.add("hidden");
+    suboptionPages.classList.add("hidden");
+});
+
+// Back button
+epubSegmentBackBtn.addEventListener("click", () => {
+    epubSegmentSection.classList.add("hidden");
+    uploadSection.classList.remove("hidden");
+});
+
+// Submit button — POST to /api/analyze with segment_method + segment_value
+epubSegmentSubmitBtn.addEventListener("click", async () => {
+    // If "By page ranges" is selected, switch to the manual row form
+    if (segMethodRanges.checked) {
+        epubSegmentSection.classList.add("hidden");
         showManualSegmentForm();
         return;
     }
 
-    // Otherwise, call estimate to get page count
+    const method = segMethodAudio.checked ? "audio_length" : "page_count";
+    const value = method === "audio_length"
+        ? segAudioMinutes.value
+        : segPageCount.value;
+
+    if (!value || parseInt(value, 10) < 1) {
+        showError("Please enter a valid positive number.");
+        return;
+    }
+
+    epubSegmentSection.classList.add("hidden");
     progressSection.classList.remove("hidden");
     progressBar.style.width = "0%";
-    progressText.textContent = "Getting page count...";
+    progressText.textContent = "Creating segments...";
+
+    const formData = new FormData();
+    formData.append("file", currentFileForManual || selectedFile);
+    formData.append("voice", voiceSelect.value);
+    formData.append("rate", speedSelect.value);
+    formData.append("segment_method", method);
+    formData.append("segment_value", value);
+
+    try {
+        const headers = await getAuthHeaders();
+
+        const res = await fetch("/api/analyze", {
+            method: "POST",
+            body: formData,
+            headers: headers,
+        });
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            showError(data.error || `Server error (${res.status})`);
+            return;
+        }
+
+        const data = await res.json();
+
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+
+        progressSection.classList.add("hidden");
+        showChapterList(data);
+    } catch (err) {
+        console.error("EPUB segment submit error:", err);
+        showError("Failed to create segments. Please try again.");
+    }
+});
+
+// Switch from auto results to manual segment
+switchToManualBtn.addEventListener("click", async () => {
+    chaptersSection.classList.add("hidden");
+
+    const switchExt = selectedFile ? selectedFile.name.split(".").pop().toLowerCase() : "";
+
+    // If we already have the data, go straight to the form
+    if (currentPageCount || currentWordCount) {
+        showEpubSegmentForm();
+        return;
+    }
+
+    // Otherwise, call estimate to get page count / word count
+    progressSection.classList.remove("hidden");
+    progressBar.style.width = "0%";
+    progressText.textContent = "Getting file info...";
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -1292,23 +1636,41 @@ switchToManualBtn.addEventListener("click", async () => {
 
         currentPageCount = data.page_count || 0;
         currentFileForManual = selectedFile;
-        showManualSegmentForm();
+        currentWordCount = data.word_count || 0;
+        currentEstimatedAudioMinutes = data.estimated_audio_minutes || 0;
+
+        showEpubSegmentForm();
     } catch (err) {
         progressSection.classList.add("hidden");
-        showError("Failed to get page count. Please try again.");
+        showError("Failed to get file info. Please try again.");
     }
 });
 
 
-function showError(message) {
+function showError(message, requiresPremium) {
     uploadSection.classList.add("hidden");
     progressSection.classList.add("hidden");
     doneSection.classList.add("hidden");
     confirmSection.classList.add("hidden");
     if (chaptersSection) chaptersSection.classList.add("hidden");
     manualSegmentSection.classList.add("hidden");
+    epubSegmentSection.classList.add("hidden");
+    premiumTrialSection.classList.add("hidden");
     errorSection.classList.remove("hidden");
     errorText.textContent = message;
+
+    const errorHint = document.getElementById("error-hint");
+    const errorPremiumBtn = document.getElementById("error-premium-btn");
+
+    if (requiresPremium) {
+        errorHint.textContent = "Upgrade to Narrio Pro for unlimited page uploads.";
+        errorPremiumBtn.classList.remove("hidden");
+        errorResetBtn.textContent = "Back to Home Page";
+    } else {
+        errorHint.textContent = "No worries — give it another shot!";
+        errorPremiumBtn.classList.add("hidden");
+        errorResetBtn.textContent = "Try Again";
+    }
 }
 
 function resetUI() {
@@ -1327,6 +1689,8 @@ function resetUI() {
     confirmSection.classList.add("hidden");
     if (chaptersSection) chaptersSection.classList.add("hidden");
     manualSegmentSection.classList.add("hidden");
+    epubSegmentSection.classList.add("hidden");
+    premiumTrialSection.classList.add("hidden");
     uploadSection.classList.remove("hidden");
 
     // Reset chapter state
@@ -1336,6 +1700,10 @@ function resetUI() {
     // Reset manual segment state
     currentPageCount = null;
     currentFileForManual = null;
+
+    // Reset EPUB segment state
+    currentWordCount = null;
+    currentEstimatedAudioMinutes = null;
 
     // Reset active conversion state
     if (activeEventSource) {
@@ -1349,6 +1717,10 @@ function resetUI() {
 
 resetBtn.addEventListener("click", resetUI);
 errorResetBtn.addEventListener("click", resetUI);
+document.getElementById("error-premium-btn").addEventListener("click", () => {
+    errorSection.classList.add("hidden");
+    startTrialFlow();
+});
 
 // Test voice
 testVoiceBtn.addEventListener("click", async () => {

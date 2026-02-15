@@ -14,7 +14,7 @@ from config import (
 )
 from extractors import extract_text, get_page_count, extract_chapters
 from tts import get_voices, convert_to_speech
-from auth import optional_auth, require_auth, get_current_user, is_premium_user
+from auth import optional_auth, require_auth, get_current_user, is_premium_user, update_clerk_metadata
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
@@ -252,6 +252,60 @@ def api_config():
     })
 
 
+@app.route("/api/start-trial", methods=["POST"])
+@require_auth
+def api_start_trial():
+    """Activate a 3-day premium trial for the current user."""
+    from datetime import datetime, timedelta
+
+    user_data = get_current_user()
+    if not user_data:
+        return jsonify({"error": "Authentication required."}), 401
+
+    user_id = user_data.get("id") or user_data.get("sub")
+    if not user_id:
+        return jsonify({"error": "Could not determine user ID."}), 400
+
+    public_metadata = user_data.get("public_metadata", {})
+
+    # Don't allow restarting a trial if one already expired
+    if public_metadata.get("trialExpired"):
+        return jsonify({"error": "Your free trial has already been used. Create a new account to start another trial."}), 400
+
+    # Check if a trial was already started (even if async revocation hasn't run yet)
+    trial_end_str = public_metadata.get("trialEnd")
+    if trial_end_str:
+        try:
+            trial_end_dt = datetime.fromisoformat(trial_end_str)
+            if datetime.utcnow() > trial_end_dt:
+                # Trial expired but trialExpired flag wasn't set yet — set it now
+                update_clerk_metadata(user_id, {"isPremium": False, "trialExpired": True})
+                return jsonify({"error": "Your free trial has already been used. Create a new account to start another trial."}), 400
+        except (ValueError, TypeError):
+            pass
+
+    # Don't restart if already premium (permanent or active trial)
+    if public_metadata.get("isPremium"):
+        return jsonify({"status": "already_premium"})
+
+    # Don't allow if a trial was already started (still active)
+    if public_metadata.get("trialStart"):
+        return jsonify({"status": "already_premium"})
+
+    # Set premium with 3-day trial
+    trial_end = (datetime.utcnow() + timedelta(days=3)).isoformat()
+    result = update_clerk_metadata(user_id, {
+        "isPremium": True,
+        "trialStart": datetime.utcnow().isoformat(),
+        "trialEnd": trial_end,
+    })
+
+    if not result:
+        return jsonify({"error": "Failed to activate trial. Please try again."}), 500
+
+    return jsonify({"status": "trial_started", "trialEnd": trial_end})
+
+
 @app.route("/api/debug-auth")
 @optional_auth
 def api_debug_auth():
@@ -473,13 +527,153 @@ def api_analyze():
     voice = request.form.get("voice", DEFAULT_VOICE)
     rate = request.form.get("rate", DEFAULT_RATE)
     segments_json = request.form.get("segments")
+    segment_method = request.form.get("segment_method")   # "audio_length" or "page_count"
+    segment_value = request.form.get("segment_value")      # minutes or pages
 
     # Save uploaded file
     book_id = str(uuid.uuid4())
     upload_path = os.path.join(UPLOAD_FOLDER, f"{book_id}.{ext}")
     file.save(upload_path)
 
-    if segments_json:
+    if segment_method and segment_value:
+        # --- Auto-segmentation by audio length or page count (EPUB + PDF) ---
+        if ext not in ("epub", "pdf"):
+            os.remove(upload_path)
+            return jsonify({"error": "Auto-segmentation is only supported for PDF and EPUB files."}), 400
+
+        try:
+            seg_val = int(segment_value)
+        except (ValueError, TypeError):
+            os.remove(upload_path)
+            return jsonify({"error": "Segment value must be a positive integer."}), 400
+
+        if seg_val < 1:
+            os.remove(upload_path)
+            return jsonify({"error": "Segment value must be a positive integer."}), 400
+
+        # Calculate target words per segment
+        if segment_method == "audio_length":
+            target_words = seg_val * 150  # 150 words per minute
+        elif segment_method == "page_count":
+            target_words = seg_val * 250  # 250 words per page
+        else:
+            os.remove(upload_path)
+            return jsonify({"error": "Invalid segment method."}), 400
+
+        try:
+            import re as _re
+            from extractors import _clean_for_tts
+
+            _sent_re = _re.compile(r'(?<=[.!?])\s+')
+            all_sentences = []  # list of (text, word_count)
+
+            if ext == "epub":
+                import ebooklib as _ebooklib
+                from ebooklib import epub as _epub_lib
+                from bs4 import BeautifulSoup as _BS4
+                from extractors.epub_extractor import TEXT_TAGS
+
+                epub_book = _epub_lib.read_epub(upload_path, options={"ignore_ncx": True})
+                for item in epub_book.get_items():
+                    if item.get_type() == _ebooklib.ITEM_DOCUMENT:
+                        html = item.get_content().decode("utf-8", errors="ignore")
+                        soup = _BS4(html, "html.parser")
+                        body = soup.find("body")
+                        if body and body.get("class"):
+                            classes = " ".join(body["class"]).lower()
+                            if "nav" in classes or "toc" in classes:
+                                continue
+                        for tag in soup.find_all(TEXT_TAGS):
+                            t = tag.get_text(separator=" ", strip=True)
+                            if not t:
+                                continue
+                            for sent in _sent_re.split(t):
+                                sent = sent.strip()
+                                if sent:
+                                    wc = len(sent.split())
+                                    if wc > 0:
+                                        all_sentences.append((sent, wc))
+            else:
+                # PDF — extract text page by page, split into sentences
+                import fitz as _fitz
+                from extractors.pdf_extractor import _rejoin_lines
+
+                doc = _fitz.open(upload_path)
+                for page in doc:
+                    text = page.get_text("text").strip()
+                    if not text:
+                        continue
+                    text = _rejoin_lines(text)
+                    for sent in _sent_re.split(text):
+                        sent = sent.strip()
+                        if sent:
+                            wc = len(sent.split())
+                            if wc > 0:
+                                all_sentences.append((sent, wc))
+                doc.close()
+
+            # Group sentences into segments by word count target
+            chapters = []
+            current_texts = []
+            current_words = 0
+            part_number = 1
+
+            for sent_text, sent_words in all_sentences:
+                current_texts.append(sent_text)
+                current_words += sent_words
+
+                if current_words >= target_words:
+                    raw_text = " ".join(current_texts)
+                    text_clean = _clean_for_tts(raw_text)
+                    chapters.append({
+                        "index": len(chapters),
+                        "section_type": "chapter",
+                        "chapter_number": None,
+                        "title": f"Part {part_number}",
+                        "chapter_label": "",
+                        "text": raw_text,
+                        "text_clean": text_clean,
+                        "page_start": None,
+                        "page_end": None,
+                        "word_count": current_words,
+                        "estimated_minutes": round(current_words / 150, 1),
+                    })
+                    part_number += 1
+                    current_texts = []
+                    current_words = 0
+
+            # Final remaining text becomes the last segment
+            if current_texts:
+                raw_text = " ".join(current_texts)
+                text_clean = _clean_for_tts(raw_text)
+                chapters.append({
+                    "index": len(chapters),
+                    "section_type": "chapter",
+                    "chapter_number": None,
+                    "title": f"Part {part_number}",
+                    "chapter_label": "",
+                    "text": raw_text,
+                    "text_clean": text_clean,
+                    "page_start": None,
+                    "page_end": None,
+                    "word_count": current_words,
+                    "estimated_minutes": round(current_words / 150, 1),
+                })
+
+            if not chapters:
+                os.remove(upload_path)
+                return jsonify({"error": "No extractable text found."}), 400
+
+            detection_method = "manual"
+
+        except ValueError as e:
+            os.remove(upload_path)
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            os.remove(upload_path)
+            return jsonify({"error": f"Failed to create segments: {e}"}), 500
+
+    elif segments_json:
         # --- Manual segment mode (PDF and EPUB) ---
         try:
             segments = json.loads(segments_json)

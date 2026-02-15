@@ -439,6 +439,104 @@ h1 {
     background: rgba(239, 68, 68, 0.08);
 }
 
+/* --- EPUB Segment Section --- */
+.epub-segment-header {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.epub-segment-header h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.epub-segment-subtitle {
+    font-size: 0.85rem;
+    color: #6B7280;
+    font-weight: 500;
+}
+
+.epub-stats-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.epub-stat {
+    flex: 1;
+    text-align: center;
+    padding: 14px 10px;
+    background: rgba(59, 130, 246, 0.05);
+    border: 1px solid rgba(59, 130, 246, 0.10);
+    border-radius: 14px;
+}
+
+.epub-stat-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 2px;
+}
+
+.epub-stat-label {
+    font-size: 0.72rem;
+    color: #6B7280;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.epub-segment-methods {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    background: rgba(139, 92, 246, 0.04);
+    border: 1px solid rgba(139, 92, 246, 0.10);
+    border-radius: 14px;
+}
+
+.epub-segment-suboption {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0 8px 28px;
+    font-size: 0.85rem;
+    color: #374151;
+    font-weight: 500;
+}
+
+.epub-segment-suboption label {
+    white-space: nowrap;
+    font-size: 0.82rem;
+    color: #6B7280;
+    font-weight: 500;
+}
+
+.epub-segment-select {
+    background: #FFFFFF;
+    color: #111827;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-family: "Inter", sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    min-width: 0;
+    flex: 1;
+}
+
+.epub-segment-select:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
 /* --- Confirm Section --- */
 #confirm-section {
     text-align: center;
@@ -684,6 +782,158 @@ h1 {
     font-size: 0.9rem;
     color: #6B7280;
     margin-bottom: 8px;
+}
+
+/* --- Premium Modal Features --- */
+.modal-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px 0;
+    text-align: left;
+}
+
+.modal-features li {
+    font-size: 0.92rem;
+    color: #374151;
+    padding: 6px 0;
+    padding-left: 24px;
+    position: relative;
+    line-height: 1.5;
+}
+
+.modal-features li::before {
+    content: "\2714";
+    position: absolute;
+    left: 0;
+    color: #8B5CF6;
+    font-weight: 700;
+}
+
+.modal-pricing {
+    font-size: 1rem;
+    color: #6B7280;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.modal-pricing strong {
+    color: #111827;
+    font-size: 1.15rem;
+}
+
+.modal-cta-btn {
+    display: block;
+    width: 100%;
+    background: linear-gradient(90deg, #2563EB, #8B5CF6);
+    color: #FFFFFF;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: "Inter", sans-serif;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin-bottom: 10px;
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.25);
+}
+
+.modal-cta-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 28px rgba(59, 130, 246, 0.35);
+}
+
+.modal-cta-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.modal-close-link {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    color: #9CA3AF;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: "Inter", sans-serif;
+    padding: 8px;
+    transition: color 0.2s ease;
+}
+
+.modal-close-link:hover {
+    color: #6B7280;
+}
+
+/* --- Premium Trial Page --- */
+.premium-trial-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.premium-trial-icon {
+    font-size: 2.5rem;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+.premium-trial-header h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 6px;
+}
+
+.premium-trial-subtitle {
+    font-size: 0.9rem;
+    color: #6B7280;
+    font-weight: 500;
+}
+
+.premium-trial-features {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+    background: rgba(139, 92, 246, 0.04);
+    border: 1px solid rgba(139, 92, 246, 0.12);
+    border-radius: 16px;
+    margin-bottom: 18px;
+}
+
+.premium-feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: #374151;
+    line-height: 1.5;
+}
+
+.premium-feature-item strong {
+    color: #111827;
+}
+
+.premium-feature-check {
+    color: #8B5CF6;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.premium-trial-pricing {
+    text-align: center;
+    font-size: 0.92rem;
+    color: #6B7280;
+    margin-bottom: 18px;
+}
+
+.premium-trial-pricing strong {
+    color: #111827;
+    font-size: 1.05rem;
 }
 
 /* --- Error --- */
@@ -1199,6 +1449,22 @@ h1 {
 
     .blob-3 {
         display: none;
+    }
+
+    .epub-stats-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .epub-segment-suboption {
+        flex-direction: column;
+        align-items: flex-start;
+        padding-left: 28px;
+        gap: 6px;
+    }
+
+    .epub-segment-select {
+        width: 100%;
     }
 
     .manual-segment-row {

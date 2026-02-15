@@ -52,11 +52,19 @@ def get_page_count(filepath):
         with fitz.open(filepath) as doc:
             return doc.page_count
     elif ext == ".epub":
+        from bs4 import BeautifulSoup
+        from .epub_extractor import TEXT_TAGS
         book = epub.read_epub(filepath, options={"ignore_ncx": True})
-        return sum(
-            1 for item in book.get_items()
-            if item.get_type() == ebooklib.ITEM_DOCUMENT
-        )
+        word_count = 0
+        for item in book.get_items():
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                html = item.get_content().decode("utf-8", errors="ignore")
+                soup = BeautifulSoup(html, "html.parser")
+                for tag in soup.find_all(TEXT_TAGS):
+                    t = tag.get_text(separator=" ", strip=True)
+                    if t:
+                        word_count += len(t.split())
+        return max(1, round(word_count / 250))
     elif ext == ".docx":
         doc = Document(filepath)
         word_count = sum(len(p.text.split()) for p in doc.paragraphs)

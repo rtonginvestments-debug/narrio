@@ -176,21 +176,84 @@ def get_current_user():
     return jwt_payload
 
 
+def update_clerk_metadata(user_id, public_metadata):
+    """
+    Update a Clerk user's public_metadata via the Backend API.
+
+    Args:
+        user_id: Clerk user ID
+        public_metadata: dict of metadata to merge
+
+    Returns:
+        dict: Updated user data, or None on failure
+    """
+    secret_key = os.getenv("CLERK_SECRET_KEY", "")
+    if not secret_key:
+        return None
+
+    try:
+        response = requests.patch(
+            f"https://api.clerk.com/v1/users/{user_id}",
+            headers={
+                "Authorization": f"Bearer {secret_key}",
+                "Content-Type": "application/json",
+            },
+            json={"public_metadata": public_metadata},
+            timeout=5,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        # Invalidate user cache so next fetch picks up changes
+        _user_cache.pop(user_id, None)
+
+        return data
+    except Exception as e:
+        print(f"Failed to update Clerk metadata for {user_id}: {e}")
+        return None
+
+
 def is_premium_user(user_data):
     """
     Check if a user has premium status via Clerk public metadata.
+    Also checks trial expiration — if trial has expired, returns False
+    and asynchronously revokes premium.
 
     Args:
         user_data: Decoded JWT payload
 
     Returns:
-        bool: True if user has isPremium flag set
+        bool: True if user has active premium or unexpired trial
     """
     if not user_data:
         return False
 
     public_metadata = user_data.get("public_metadata", {})
-    return public_metadata.get("isPremium", False) is True
+    if not public_metadata.get("isPremium", False):
+        return False
+
+    # Check trial expiration
+    trial_end = public_metadata.get("trialEnd")
+    if trial_end:
+        try:
+            from datetime import datetime
+            end_dt = datetime.fromisoformat(trial_end)
+            if datetime.utcnow() > end_dt:
+                # Trial expired — revoke premium in background
+                user_id = user_data.get("id") or user_data.get("sub")
+                if user_id:
+                    import threading
+                    threading.Thread(
+                        target=update_clerk_metadata,
+                        args=(user_id, {"isPremium": False, "trialExpired": True}),
+                        daemon=True,
+                    ).start()
+                    _user_cache.pop(user_id, None)
+                return False
+        except (ValueError, TypeError):
+            pass  # Not a valid date, treat as permanent premium
+
+    return True
 
 
 def optional_auth(f):
