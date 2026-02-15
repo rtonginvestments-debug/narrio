@@ -1,12 +1,12 @@
 """
 Clerk authentication utilities for JWT verification and user management.
 """
+import os
 import time
 import jwt
 import requests
 from functools import wraps
 from flask import request, jsonify, g
-from config import CLERK_JWKS_URL, CLERK_SECRET_KEY
 
 # Cache for JWKS (JSON Web Key Set)
 _jwks_cache = None
@@ -23,11 +23,12 @@ def get_jwks():
     if _jwks_cache is not None:
         return _jwks_cache
 
-    if not CLERK_JWKS_URL:
+    jwks_url = os.getenv("CLERK_JWKS_URL", "")
+    if not jwks_url:
         return None
 
     try:
-        response = requests.get(CLERK_JWKS_URL, timeout=5)
+        response = requests.get(jwks_url, timeout=5)
         response.raise_for_status()
         _jwks_cache = response.json()
         return _jwks_cache
@@ -111,13 +112,14 @@ def fetch_clerk_user(user_id):
     if cached and cached["expires_at"] > now:
         return cached["data"]
 
-    if not CLERK_SECRET_KEY:
+    secret_key = os.getenv("CLERK_SECRET_KEY", "")
+    if not secret_key:
         return None
 
     try:
         response = requests.get(
             f"https://api.clerk.com/v1/users/{user_id}",
-            headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
+            headers={"Authorization": f"Bearer {secret_key}"},
             timeout=5,
         )
         response.raise_for_status()

@@ -238,8 +238,10 @@ def api_voices():
 @app.route("/api/config")
 def api_config():
     """Return frontend configuration including Clerk keys."""
+    # Read directly from env at request time to pick up Railway env vars
+    clerk_key = os.getenv("CLERK_PUBLISHABLE_KEY", "") or CLERK_PUBLISHABLE_KEY
     return jsonify({
-        "clerkPublishableKey": CLERK_PUBLISHABLE_KEY,
+        "clerkPublishableKey": clerk_key,
         "freeTierLimit": FREE_PAGE_LIMIT,
     })
 
