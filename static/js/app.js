@@ -1130,8 +1130,8 @@ function addManualRow() {
 
     row.innerHTML = `
         <input type="text" class="segment-name-input" placeholder="Chapter name" maxlength="100">
-        <input type="number" class="segment-page-input" placeholder="Start" min="1" max="${maxPage}">
-        <input type="number" class="segment-page-input" placeholder="End" min="1" max="${maxPage}">
+        <input type="number" class="segment-page-input" placeholder="Start page" min="1" max="${maxPage}">
+        <input type="number" class="segment-page-input" placeholder="End page" min="1" max="${maxPage}">
         <button type="button" class="btn-remove-row" title="Remove row">&times;</button>
     `;
 
@@ -1157,11 +1157,20 @@ manualSubmitBtn.addEventListener("click", async () => {
     for (let i = 0; i < rows.length; i++) {
         const inputs = rows[i].querySelectorAll("input");
         const name = inputs[0].value.trim();
-        const startPage = parseInt(inputs[1].value, 10);
-        const endPage = parseInt(inputs[2].value, 10);
+        const startVal = inputs[1].value.trim();
+        const endVal = inputs[2].value.trim();
+
+        // Skip completely empty rows
+        if (!name && !startVal && !endVal) {
+            continue;
+        }
+
+        // If partially filled, require all fields
+        const startPage = parseInt(startVal, 10);
+        const endPage = parseInt(endVal, 10);
 
         if (!name || isNaN(startPage) || isNaN(endPage)) {
-            showError(`Row ${i + 1}: All fields are required.`);
+            showError(`Row ${i + 1}: Please fill in all fields or leave the row completely empty.`);
             return;
         }
 
@@ -1181,6 +1190,11 @@ manualSubmitBtn.addEventListener("click", async () => {
         }
 
         segments.push({ name, start_page: startPage, end_page: endPage });
+    }
+
+    if (segments.length === 0) {
+        showError("Please fill in at least one chapter row.");
+        return;
     }
 
     // Check for overlapping ranges
