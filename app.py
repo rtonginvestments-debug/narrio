@@ -884,22 +884,13 @@ def api_book_status(book_id):
 
 
 @app.route("/api/cancel/<job_id>", methods=["POST"])
-@optional_auth
 def api_cancel(job_id):
     """Cancel a running conversion job."""
-    user_data = get_current_user()
-    current_user_id = (user_data.get("id") or user_data.get("sub")) if user_data else None
-
     with jobs_lock:
         job = jobs.get(job_id)
 
     if job is None:
         return jsonify({"error": "Job not found."}), 404
-
-    # Authorization check
-    job_user_id = job.get("user_id")
-    if job_user_id and job_user_id != current_user_id:
-        return jsonify({"error": "Unauthorized."}), 403
 
     if job["status"] not in ("processing",):
         return jsonify({"error": "Job is not running."}), 400
@@ -947,12 +938,8 @@ def api_cancel_book(book_id):
 
 
 @app.route("/api/progress/<job_id>")
-@optional_auth
 def api_progress(job_id):
-    # Get current user BEFORE entering generator (while we have request context)
-    user_data = get_current_user()
-    current_user_id = (user_data.get("id") or user_data.get("sub")) if user_data else None
-
+    # Job IDs are UUIDs — unguessable, so no auth check needed for progress.
     def generate():
         while True:
             with jobs_lock:
@@ -960,13 +947,6 @@ def api_progress(job_id):
 
             if job is None:
                 data = {"status": "error", "message": "Job not found.", "progress": 0}
-                yield f"data: {json.dumps(data)}\n\n"
-                return
-
-            # Check authorization: if job has a user_id, verify it matches current user
-            job_user_id = job.get("user_id")
-            if job_user_id and job_user_id != current_user_id:
-                data = {"status": "error", "message": "Unauthorized access to this job.", "progress": 0}
                 yield f"data: {json.dumps(data)}\n\n"
                 return
 
@@ -990,22 +970,13 @@ def api_progress(job_id):
 
 
 @app.route("/api/download/<job_id>")
-@optional_auth
 def api_download(job_id):
-    # Get current user for authorization check
-    user_data = get_current_user()
-    current_user_id = (user_data.get("id") or user_data.get("sub")) if user_data else None
-
+    # Job IDs are UUIDs — unguessable, so no auth check needed for download.
     with jobs_lock:
         job = jobs.get(job_id)
 
     if job is None:
         return jsonify({"error": "Job not found."}), 404
-
-    # Check authorization: if job has a user_id, verify it matches current user
-    job_user_id = job.get("user_id")
-    if job_user_id and job_user_id != current_user_id:
-        return jsonify({"error": "Unauthorized access to this job."}), 403
 
     if job["status"] != "completed":
         return jsonify({"error": "Conversion not complete."}), 400
