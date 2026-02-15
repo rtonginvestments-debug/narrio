@@ -92,6 +92,11 @@ def run_conversion(job_id, filepath, original_name, voice, rate):
 
         convert_to_speech(text, output_path, voice, rate, progress_callback=update_progress)
 
+        # Pause at each step so the SSE (0.5s poll) can catch it
+        time.sleep(0.6)
+        update_progress(99, "Wrapping up...")
+        time.sleep(0.6)
+
         # Check cancellation one final time before marking complete
         if is_job_cancelled(job_id):
             raise InterruptedError("Conversion cancelled.")
@@ -152,6 +157,11 @@ def run_chapter_conversion(job_id, book_id, chapter_index, chapter_text, downloa
         output_path = os.path.join(OUTPUT_FOLDER, output_filename)
 
         convert_to_speech(chapter_text, output_path, voice, rate, progress_callback=update_progress)
+
+        # Pause at each step so the SSE (0.5s poll) can catch it
+        time.sleep(0.6)
+        update_progress(99, "Wrapping up...")
+        time.sleep(0.6)
 
         if is_job_cancelled(job_id):
             raise InterruptedError("Conversion cancelled.")

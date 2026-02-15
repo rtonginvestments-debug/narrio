@@ -759,6 +759,23 @@ h1 {
     font-weight: 500;
 }
 
+.progress-prompt {
+    text-align: center;
+    color: #8B5CF6;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 8px;
+    min-height: 1.4em;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.progress-prompt.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 /* --- Done --- */
 .done-icon {
     text-align: center;

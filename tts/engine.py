@@ -78,7 +78,7 @@ def convert_to_speech(text, output_path, voice, rate, progress_callback=None):
                         total_bytes += len(chunk["data"])
                         if progress_callback:
                             raw_pct = min(total_bytes / estimated_size, 1.0)
-                            pct = 20 + raw_pct * 75
+                            pct = 20 + raw_pct * 78
                             progress_callback(pct, "Converting to speech...")
                 # Write silence after every segment except the last.
                 if idx < len(segments) - 1:
@@ -96,4 +96,4 @@ def convert_to_speech(text, output_path, voice, rate, progress_callback=None):
         asyncio.run(_convert())
 
     if progress_callback:
-        progress_callback(95, "Finalizing audio...")
+        progress_callback(98, "Finalizing audio...")

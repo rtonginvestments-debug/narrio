@@ -10,6 +10,90 @@ const uploadSection = document.getElementById("upload-section");
 const progressSection = document.getElementById("progress-section");
 const progressBar = document.getElementById("progress-bar");
 const progressText = document.getElementById("progress-text");
+const progressPrompt = document.getElementById("progress-prompt");
+
+// Encouraging prompts at specific percentages
+const progressPrompts = [
+    [20, "Warming up my voice"],
+    [40, "Cruising along"],
+    [60, "Halfway-ish"],
+    [80, "Home stretch"],
+    [85, "Almost there"],
+    [90, "Final polish"],
+    [95, "Packing it up"],
+    [98, "Sealing the MP3"],
+    [99, "One last check"],
+    [100, "Done! Download ready"]
+];
+
+function getProgressPrompt(pct) {
+    let prompt = "";
+    for (const [threshold, msg] of progressPrompts) {
+        if (pct >= threshold) prompt = msg;
+    }
+    return prompt;
+}
+
+// Finalizing prompts — cycle at random 3–5s intervals once progress reaches 95%
+const finalizingPrompts = [
+    "Final checks",
+    "Audio stitching",
+    "Exporting MP3",
+    "Polishing sound",
+    "Nearly finished",
+    "Preparing download",
+    "Last touches"
+];
+let finalizingTimer = null;
+let finalizingIndex = 0;
+let lastFinalizingPct = 0;
+
+function randomDelay() {
+    return 3000 + Math.random() * 2000;
+}
+
+function showNextFinalizing() {
+    const msg = finalizingPrompts[finalizingIndex % finalizingPrompts.length];
+    progressPrompt.textContent = msg;
+    progressPrompt.classList.add("visible");
+    progressText.textContent = `${msg}... (${lastFinalizingPct}%)`;
+    finalizingIndex++;
+    finalizingTimer = setTimeout(showNextFinalizing, randomDelay());
+}
+
+function startFinalizingCycle() {
+    if (finalizingTimer) return;
+    finalizingIndex = 0;
+    showNextFinalizing();
+}
+
+function stopFinalizingCycle() {
+    if (finalizingTimer) {
+        clearTimeout(finalizingTimer);
+        finalizingTimer = null;
+        finalizingIndex = 0;
+    }
+}
+
+function startChapterCycle(index, statusEl, pct) {
+    if (chapterJobs[index].finalizingTimer) return;
+    let chIdx = 0;
+    function next() {
+        const msg = finalizingPrompts[chIdx % finalizingPrompts.length];
+        if (statusEl) statusEl.textContent = `${pct}% — ${msg}`;
+        chIdx++;
+        chapterJobs[index].finalizingTimer = setTimeout(next, randomDelay());
+    }
+    next();
+}
+
+function stopChapterCycle(idx) {
+    if (chapterJobs[idx] && chapterJobs[idx].finalizingTimer) {
+        clearTimeout(chapterJobs[idx].finalizingTimer);
+        chapterJobs[idx].finalizingTimer = null;
+    }
+}
+
 const doneSection = document.getElementById("done-section");
 const downloadBtn = document.getElementById("download-btn");
 const resetBtn = document.getElementById("reset-btn");
@@ -650,6 +734,8 @@ async function estimateAndConfirm() {
     progressSection.classList.remove("hidden");
     progressBar.style.width = "0%";
     progressText.textContent = "Estimating conversion time...";
+    progressPrompt.textContent = "";
+    progressPrompt.classList.remove("visible");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -725,6 +811,8 @@ async function startSingleConversion() {
     progressSection.classList.remove("hidden");
     progressBar.style.width = "0%";
     progressText.textContent = "Uploading...";
+    progressPrompt.textContent = "";
+    progressPrompt.classList.remove("visible");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -773,22 +861,37 @@ async function listenProgress(jobId) {
         const data = JSON.parse(event.data);
 
         const pct = Math.round(data.progress);
+        lastFinalizingPct = pct;
         progressBar.style.width = pct + "%";
-        progressText.textContent = `${data.message} (${pct}%)`;
+
+        if (pct >= 95 && data.status === "processing") {
+            startFinalizingCycle();
+        } else {
+            stopFinalizingCycle();
+            progressText.textContent = `${data.message} (${pct}%)`;
+            const prompt = getProgressPrompt(pct);
+            if (prompt) {
+                progressPrompt.textContent = prompt;
+                progressPrompt.classList.add("visible");
+            }
+        }
 
         if (data.status === "completed") {
+            stopFinalizingCycle();
             source.close();
             activeJobId = null;
             activeEventSource = null;
             progressControls.classList.add("hidden");
             showDone(jobId);
         } else if (data.status === "cancelled") {
+            stopFinalizingCycle();
             source.close();
             activeJobId = null;
             activeEventSource = null;
             progressControls.classList.add("hidden");
             showError("Conversion was cancelled.");
         } else if (data.status === "error") {
+            stopFinalizingCycle();
             source.close();
             activeJobId = null;
             activeEventSource = null;
@@ -798,6 +901,7 @@ async function listenProgress(jobId) {
     };
 
     source.onerror = () => {
+        stopFinalizingCycle();
         source.close();
         activeJobId = null;
         activeEventSource = null;
@@ -856,6 +960,8 @@ async function analyzeBook() {
     progressSection.classList.remove("hidden");
     progressBar.style.width = "0%";
     progressText.textContent = "Analyzing chapters...";
+    progressPrompt.textContent = "";
+    progressPrompt.classList.remove("visible");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -1176,15 +1282,27 @@ async function listenChapterProgress(index, jobId) {
         const bar = document.getElementById(`chapter-bar-${index}`);
         const statusEl = document.getElementById(`chapter-status-${index}`);
 
-        if (bar) bar.style.width = Math.round(data.progress) + "%";
-        if (statusEl) statusEl.textContent = `${Math.round(data.progress)}%`;
+        const pct = Math.round(data.progress);
+        if (bar) bar.style.width = pct + "%";
+
+        if (pct >= 95 && data.status === "processing") {
+            if (chapterJobs[index] && !chapterJobs[index].finalizingTimer) {
+                startChapterCycle(index, statusEl, pct);
+            }
+        } else {
+            stopChapterCycle(index);
+            const prompt = getProgressPrompt(pct);
+            if (statusEl) statusEl.textContent = prompt ? `${pct}% — ${prompt}` : `${pct}%`;
+        }
 
         if (data.status === "completed") {
+            stopChapterCycle(index);
             source.close();
             chapterJobs[index].status = "completed";
             showChapterDownload(index, jobId);
             updateOverallProgress();
         } else if (data.status === "cancelled") {
+            stopChapterCycle(index);
             source.close();
             chapterJobs[index].status = "cancelled";
             const actionDiv = document.getElementById(`chapter-action-${index}`);
@@ -1193,6 +1311,7 @@ async function listenChapterProgress(index, jobId) {
             }
             updateOverallProgress();
         } else if (data.status === "error") {
+            stopChapterCycle(index);
             source.close();
             chapterJobs[index].status = "error";
             const actionDiv = document.getElementById(`chapter-action-${index}`);
@@ -1204,6 +1323,7 @@ async function listenChapterProgress(index, jobId) {
     };
 
     source.onerror = () => {
+        stopChapterCycle(index);
         source.close();
         chapterJobs[index].status = "error";
         const actionDiv = document.getElementById(`chapter-action-${index}`);
@@ -1284,6 +1404,8 @@ async function prepareManualSegment() {
     progressSection.classList.remove("hidden");
     progressBar.style.width = "0%";
     progressText.textContent = "Getting page count...";
+    progressPrompt.textContent = "";
+    progressPrompt.classList.remove("visible");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -1470,6 +1592,8 @@ manualSubmitBtn.addEventListener("click", async () => {
     progressSection.classList.remove("hidden");
     progressBar.style.width = "0%";
     progressText.textContent = "Creating segments...";
+    progressPrompt.textContent = "";
+    progressPrompt.classList.remove("visible");
 
     const formData = new FormData();
     formData.append("file", currentFileForManual || selectedFile);
@@ -1559,6 +1683,8 @@ epubSegmentSubmitBtn.addEventListener("click", async () => {
     progressSection.classList.remove("hidden");
     progressBar.style.width = "0%";
     progressText.textContent = "Creating segments...";
+    progressPrompt.textContent = "";
+    progressPrompt.classList.remove("visible");
 
     const formData = new FormData();
     formData.append("file", currentFileForManual || selectedFile);
@@ -1613,6 +1739,8 @@ switchToManualBtn.addEventListener("click", async () => {
     progressSection.classList.remove("hidden");
     progressBar.style.width = "0%";
     progressText.textContent = "Getting file info...";
+    progressPrompt.textContent = "";
+    progressPrompt.classList.remove("visible");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
