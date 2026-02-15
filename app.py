@@ -116,6 +116,9 @@ def run_conversion(job_id, filepath, original_name, voice, rate):
             pass
 
     except Exception as e:
+        import traceback
+        print(f"[ERROR] run_conversion {job_id}: {e}", flush=True)
+        traceback.print_exc()
         with jobs_lock:
             if jobs.get(job_id, {}).get("status") != "cancelled":
                 jobs[job_id]["status"] = "error"
@@ -178,6 +181,9 @@ def run_chapter_conversion(job_id, book_id, chapter_index, chapter_text, downloa
             pass
 
     except Exception as e:
+        import traceback
+        print(f"[ERROR] run_chapter_conversion {job_id} ch{chapter_index}: {e}", flush=True)
+        traceback.print_exc()
         with jobs_lock:
             if jobs.get(job_id, {}).get("status") != "cancelled":
                 jobs[job_id]["status"] = "error"
@@ -976,7 +982,11 @@ def api_progress(job_id):
 
             time.sleep(0.5)
 
-    return Response(generate(), mimetype="text/event-stream")
+    response = Response(generate(), mimetype="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache, no-transform"
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Connection"] = "keep-alive"
+    return response
 
 
 @app.route("/api/download/<job_id>")
@@ -1008,5 +1018,15 @@ def api_download(job_id):
 
 
 if __name__ == "__main__":
+    # Startup diagnostics
+    clerk_key = os.getenv("CLERK_PUBLISHABLE_KEY", "")
+    clerk_secret = os.getenv("CLERK_SECRET_KEY", "")
+    clerk_jwks = os.getenv("CLERK_JWKS_URL", "")
+    print(f"[STARTUP] CLERK_PUBLISHABLE_KEY set: {bool(clerk_key)} (len={len(clerk_key)})", flush=True)
+    print(f"[STARTUP] CLERK_SECRET_KEY set: {bool(clerk_secret)} (len={len(clerk_secret)})", flush=True)
+    print(f"[STARTUP] CLERK_JWKS_URL set: {bool(clerk_jwks)}", flush=True)
+    print(f"[STARTUP] UPLOAD_FOLDER: {UPLOAD_FOLDER}", flush=True)
+    print(f"[STARTUP] OUTPUT_FOLDER: {OUTPUT_FOLDER}", flush=True)
+
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
