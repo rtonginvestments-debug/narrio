@@ -229,6 +229,11 @@ def is_premium_user(user_data):
         return False
 
     public_metadata = user_data.get("public_metadata", {})
+
+    # Admin users are always permanently premium
+    if public_metadata.get("role") == "admin":
+        return True
+
     if not public_metadata.get("isPremium", False):
         return False
 

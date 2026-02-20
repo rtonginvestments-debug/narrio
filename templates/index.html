@@ -22,6 +22,7 @@
                 <div class="user-avatar" id="user-avatar"></div>
                 <span id="user-name" class="user-name"></span>
                 <span id="user-badge" class="premium-badge hidden">Pro</span>
+                <span id="tokens-badge" class="tokens-badge hidden"></span>
                 <button id="sign-out-btn" class="nav-btn-text">Sign Out</button>
             </div>
             <div id="auth-buttons" class="auth-buttons">
@@ -70,6 +71,28 @@
                     <label class="radio-label" id="manual-segment-radio-label">
                         <input type="radio" name="segment-type" id="manual-segment-radio" value="manual">
                         Manually assign chapters
+                    </label>
+                </div>
+            </div>
+
+            <div id="summarize-option" class="hidden">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="summarize-checkbox">
+                    Summarize with AI
+                    <span class="pro-badge-inline">Pro</span>
+                </label>
+                <div id="summary-length-options" class="summary-length-options hidden">
+                    <label class="radio-label">
+                        <input type="radio" name="summary-length" id="summary-short" value="short" checked>
+                        Short <span class="summary-length-hint">(~5 min)</span> <span class="token-cost">1 token</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="summary-length" id="summary-medium" value="medium">
+                        Medium <span class="summary-length-hint">(~10 min)</span> <span class="token-cost">2 tokens</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="summary-length" id="summary-long" value="long">
+                        Long <span class="summary-length-hint">(~20 min)</span> <span class="token-cost">4 tokens</span>
                     </label>
                 </div>
             </div>
@@ -235,6 +258,21 @@
             <button id="reset-btn" class="btn-secondary">Convert Another</button>
         </div>
 
+        <!-- AI Summary Result Section -->
+        <div id="summary-section" class="hidden">
+            <div class="summary-header">
+                <div class="summary-icon">&#10024;</div>
+                <h2>AI Summary Ready</h2>
+                <p class="summary-subtext">Your AI-generated summary is ready — read it here or download it.</p>
+            </div>
+            <div id="summary-text-display" class="summary-text-display"></div>
+            <div class="summary-btn-row">
+                <a id="summary-download-btn" class="btn-sm-primary" href="#">Download MP3</a>
+                <a id="summary-pdf-btn" class="btn-sm-secondary" href="#">Download PDF</a>
+                <button id="summary-reset-btn" class="btn-sm-outline">Convert Another</button>
+            </div>
+        </div>
+
         <!-- Premium Trial Section -->
         <div id="premium-trial-section" class="hidden">
             <div class="premium-trial-header">
@@ -258,6 +296,10 @@
                 <div class="premium-feature-item">
                     <span class="premium-feature-check">&#10004;</span>
                     <span>Download <strong>individual chapter MP3s</strong></span>
+                </div>
+                <div class="premium-feature-item">
+                    <span class="premium-feature-check">&#10004;</span>
+                    <span><strong>AI summaries</strong> — get a 5, 10, or 30-minute summary of any book</span>
                 </div>
                 <div class="premium-feature-item">
                     <span class="premium-feature-check">&#10004;</span>

@@ -10,7 +10,7 @@ import json
 from config import (
     UPLOAD_FOLDER, OUTPUT_FOLDER, ALLOWED_EXTENSIONS,
     MAX_FILE_SIZE, DEFAULT_VOICE, DEFAULT_RATE, CLEANUP_AGE,
-    FREE_PAGE_LIMIT, CLERK_PUBLISHABLE_KEY,
+    FREE_PAGE_LIMIT, CLERK_PUBLISHABLE_KEY, GEMINI_API_KEY,
 )
 from extractors import extract_text, get_page_count, extract_chapters
 from tts import get_voices, convert_to_speech
@@ -37,6 +37,21 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def get_summary_tokens(user_data):
+    """Return (tokens_remaining, month_key) — admins get 100 (never deducted), others get 10/month."""
+    import datetime
+    meta = (user_data or {}).get("public_metadata", {})
+    # Admin users have 100 tokens and are never deducted (month_key="" signals skip)
+    if meta.get("role") == "admin":
+        return 100, ""
+    month_key = datetime.datetime.utcnow().strftime("%Y-%m")
+    stored_month = meta.get("summarizeTokensMonth", "")
+    if stored_month != month_key:
+        return 10, month_key   # fresh month — full 10 tokens
+    remaining = meta.get("summarizeTokens", 10)
+    return remaining, month_key
 
 
 def cleanup_old_files():
@@ -235,6 +250,178 @@ def run_chapter_conversion_throttled(semaphore, job_id, book_id, chapter_index, 
         run_chapter_conversion(job_id, book_id, chapter_index, *args)
     finally:
         semaphore.release()
+
+
+def run_summarize(job_id, filepath, original_name, voice, rate, summary_length):
+    """Extract text, summarize with Claude, then convert summary to audio."""
+    def update_progress(percent, message):
+        if is_job_cancelled(job_id):
+            raise InterruptedError("Summarization cancelled.")
+        with jobs_lock:
+            jobs[job_id]["progress"] = round(percent, 1)
+            jobs[job_id]["message"] = message
+
+    try:
+        update_progress(5, "Extracting text...")
+        text = extract_text(filepath)
+
+        if not text.strip():
+            raise ValueError("No text could be extracted from the file.")
+
+        update_progress(20, "Text extracted. Generating AI summary...")
+
+        # Truncate to stay comfortably within Claude's context window
+        max_chars = 150_000
+        truncated = len(text) > max_chars
+        input_text = text[:max_chars]
+
+        # max_tokens is set tight (~1.35 tokens/word) to enforce brevity at the model level
+        length_configs = {
+            "short":  ("5-minute",  "5",  750,  1050),
+            "medium": ("10-minute", "10", 1500, 2100),
+            "long":   ("20-minute", "20", 3000, 4200),
+        }
+        length_label, minutes_str, target_words, max_tokens = length_configs.get(
+            summary_length, length_configs["medium"]
+        )
+
+        truncation_note = (
+            f" Note: only the first {max_chars:,} characters of the document were provided."
+        ) if truncated else ""
+
+        prompt = (
+            f"You are an expert at turning written documents into engaging, easy-to-follow audio summaries. "
+            f"You will be given a PDF document and a target length in minutes.\n\n"
+            f"Follow these rules strictly:\n\n"
+            f"1. CONTENT FIDELITY: Only discuss information that is explicitly stated in the document. "
+            f"Do not add, infer, or fabricate any facts, claims, statistics, or quotes that are not present "
+            f"in the source material. If something is unclear in the document, do not attempt to fill in gaps.\n\n"
+            f"2. FULL COVERAGE: Give balanced attention to the entire document from beginning to end. Do not "
+            f"disproportionately focus on the opening sections while glossing over or ignoring material from "
+            f"the middle or end. Every major section, argument, and finding in the document should be represented "
+            f"in the summary in proportion to its significance, regardless of where it appears in the document. "
+            f"Material introduced late in the document is just as important as material introduced early.\n\n"
+            f"3. OPENING: Begin by stating the title of the document exactly as it appears, then give the "
+            f"listener a brief sense of what the piece is about and why it matters.\n\n"
+            f"4. SYNTHESIS: Do not simply walk through the document page by page or section by section. "
+            f"Instead, synthesize the material into a coherent narrative that highlights the most important "
+            f"ideas, key findings, and central arguments. Connect related ideas together, even if they appear "
+            f"in different parts of the document. Help the listener understand not just what was said, but why it matters.\n\n"
+            f"5. KEY TAKEAWAYS: Weave the most important takeaways naturally into the summary. When a finding, "
+            f"statistic, or conclusion is particularly significant, take a moment to explain its importance or "
+            f"implications in plain language.\n\n"
+            f"6. CLOSING: End the summary with a natural, conversational conclusion that ties everything together. "
+            f"Briefly synthesize the key points and main takeaways so the listener walks away with a clear "
+            f"understanding of what the document covered and what matters most. The ending should feel complete "
+            f"and satisfying, not abrupt. Do not use phrases like \"in conclusion\" or \"to sum up.\" Instead, "
+            f"bring the summary to a natural close the way a thoughtful conversation would wind down.\n\n"
+            f"7. VOICE AND TONE: Write as if you are a knowledgeable friend explaining the document to someone "
+            f"over coffee. Be warm, clear, and conversational. Avoid jargon unless the document uses it, and "
+            f"when jargon appears, briefly explain it. Use natural transitions between ideas. The listener "
+            f"should feel like they are having an engaging conversation, not sitting through a lecture.\n\n"
+            f"8. PLAIN TEXT ONLY: Output only the spoken summary text. Do not include any stage directions, "
+            f"sound cues, production notes, or formatting markers such as \"(Intro Music)\", \"(Pause)\", "
+            f"\"**Bold Text**\", \"[Section Break]\", or anything similar. The output should read as natural, "
+            f"continuous spoken prose.\n\n"
+            f"9. STRUCTURE: Deliver the summary as a smooth, flowing narrative. Do not use bullet points, "
+            f"numbered lists, headers, or section labels. Write in complete sentences and paragraphs.\n\n"
+            f"10. LENGTH: The user has requested a summary of approximately {minutes_str} minutes of spoken audio. "
+            f"Use roughly 150 words per minute as your guide, so aim for approximately {target_words} words. "
+            f"Stop at a natural sentence boundary when you approach the limit. Do not pad or repeat yourself.{truncation_note}\n\n"
+            f"11. ATTRIBUTION: When referencing claims or findings, make clear they come from the document or "
+            f"its authors. Do not present the document's claims as universal truths.\n\n"
+            f"Document:\n{input_text}"
+        )
+
+        api_key = os.getenv("GEMINI_API_KEY", "") or GEMINI_API_KEY
+        if not api_key:
+            raise ValueError(
+                "AI summarization is not configured on this server. "
+                "Please set the GEMINI_API_KEY environment variable."
+            )
+
+        from google import genai as _genai
+        from google.genai import types as _genai_types
+        client = _genai.Client(api_key=api_key)
+
+        update_progress(25, "Generating AI summary (this may take a moment)...")
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=_genai_types.GenerateContentConfig(
+                max_output_tokens=max_tokens,
+                thinking_config=_genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        summary_text = response.text
+
+        # Safety net: hard-truncate to target_words at a sentence boundary
+        words = summary_text.split()
+        if len(words) > target_words:
+            truncated_text = " ".join(words[:target_words])
+            # Walk back to the last sentence ending so it doesn't cut mid-sentence
+            for punct in ('.', '!', '?'):
+                last = truncated_text.rfind(punct)
+                if last > len(truncated_text) * 0.75:
+                    truncated_text = truncated_text[:last + 1]
+                    break
+            summary_text = truncated_text
+
+        with jobs_lock:
+            jobs[job_id]["summary_text"] = summary_text
+
+        update_progress(50, "Summary generated. Converting to audio...")
+
+        base_name = os.path.splitext(original_name)[0]
+        output_filename = f"{job_id}_{base_name}_summary.mp3"
+        output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+
+        def tts_progress(percent, msg):
+            update_progress(50 + percent * 0.45, msg)
+
+        convert_to_speech(summary_text, output_path, voice, rate, progress_callback=tts_progress)
+
+        time.sleep(0.6)
+        update_progress(99, "Wrapping up...")
+        time.sleep(0.6)
+
+        if is_job_cancelled(job_id):
+            raise InterruptedError("Summarization cancelled.")
+
+        with jobs_lock:
+            jobs[job_id]["progress"] = 100
+            jobs[job_id]["message"] = "Summary ready!"
+            jobs[job_id]["status"] = "completed"
+            jobs[job_id]["output_file"] = output_filename
+            jobs[job_id]["download_name"] = f"{base_name} - Summary.mp3"
+
+    except InterruptedError:
+        with jobs_lock:
+            jobs[job_id]["status"] = "cancelled"
+            jobs[job_id]["message"] = "Summarization cancelled."
+            jobs[job_id]["progress"] = 0
+        try:
+            base = os.path.splitext(original_name)[0]
+            os.remove(os.path.join(OUTPUT_FOLDER, f"{job_id}_{base}_summary.mp3"))
+        except OSError:
+            pass
+
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] run_summarize {job_id}: {e}", flush=True)
+        traceback.print_exc()
+        with jobs_lock:
+            if jobs.get(job_id, {}).get("status") != "cancelled":
+                jobs[job_id]["status"] = "error"
+                jobs[job_id]["message"] = str(e)
+                jobs[job_id]["progress"] = 0
+
+    finally:
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
 
 
 @app.route("/")
@@ -1118,6 +1305,100 @@ def api_book_status(book_id):
     })
 
 
+@app.route("/api/summarize", methods=["POST"])
+@require_auth
+def api_summarize():
+    """Summarize an uploaded PDF/EPUB using Claude AI. Premium only."""
+    user_data = get_current_user()
+    if not is_premium_user(user_data):
+        return jsonify({"error": "Premium account required for AI summarization."}), 403
+
+    user_id = user_data.get("id") or user_data.get("sub")
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded."}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected."}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Only PDF, EPUB, and Word files are supported."}), 400
+
+    voice = request.form.get("voice", DEFAULT_VOICE)
+    rate = request.form.get("rate", DEFAULT_RATE)
+    summary_length = request.form.get("summary_length", "medium")
+
+    if summary_length not in ("short", "medium", "long"):
+        return jsonify({"error": "summary_length must be short, medium, or long."}), 400
+
+    api_key = os.getenv("GEMINI_API_KEY", "") or GEMINI_API_KEY
+    if not api_key:
+        return jsonify({
+            "error": "AI summarization is not available — the server is missing a GEMINI_API_KEY."
+        }), 503
+
+    job_id = str(uuid.uuid4())
+    ext = file.filename.rsplit(".", 1)[1].lower()
+    upload_path = os.path.join(UPLOAD_FOLDER, f"{job_id}.{ext}")
+    file.save(upload_path)
+
+    # Enforce 25-page limit for AI summaries
+    try:
+        page_count = get_page_count(upload_path)
+        if page_count > 25:
+            os.remove(upload_path)
+            return jsonify({
+                "error": f"AI summaries are limited to files with 25 pages or fewer. This file has {page_count} pages."
+            }), 400
+    except Exception:
+        pass  # don't block if page counting fails
+
+    # Token cost map and check
+    token_costs = {"short": 1, "medium": 2, "long": 4}
+    token_cost = token_costs.get(summary_length, 1)
+    tokens_remaining, month_key = get_summary_tokens(user_data)
+
+    if tokens_remaining < token_cost:
+        os.remove(upload_path)
+        return jsonify({
+            "error": "You're out of AI summary tokens for this month. Tokens reset on the 1st of each month.",
+            "tokens_remaining": tokens_remaining,
+        }), 402
+
+    with jobs_lock:
+        jobs[job_id] = {
+            "status": "processing",
+            "progress": 0,
+            "message": "Starting...",
+            "output_file": None,
+            "download_name": None,
+            "user_id": user_id,
+            "is_premium": True,
+            "summary_text": None,
+            "job_type": "summarize",
+        }
+
+    thread = threading.Thread(
+        target=run_summarize,
+        args=(job_id, upload_path, file.filename, voice, rate, summary_length),
+        daemon=True,
+    )
+    thread.start()
+
+    # Deduct tokens from Clerk metadata (fire-and-forget; skipped for admins)
+    if month_key:  # month_key == "" means admin — never deduct
+        new_remaining = tokens_remaining - token_cost
+        update_clerk_metadata(user_id, {
+            "summarizeTokens": new_remaining,
+            "summarizeTokensMonth": month_key,
+        })
+    else:
+        new_remaining = tokens_remaining  # admin keeps 100
+
+    return jsonify({"job_id": job_id, "tokens_remaining": new_remaining})
+
+
 @app.route("/api/cancel/<job_id>", methods=["POST"])
 def api_cancel(job_id):
     """Cancel a running conversion job."""
@@ -1190,6 +1471,8 @@ def api_progress(job_id):
                 "progress": job["progress"],
                 "message": job["message"],
             }
+            if job.get("summary_text") and job["status"] == "completed":
+                data["summary_text"] = job["summary_text"]
             yield f"data: {json.dumps(data)}\n\n"
 
             if job["status"] in ("completed", "error", "cancelled"):
@@ -1221,6 +1504,56 @@ def api_download(job_id):
         return jsonify({"error": "Output file not found."}), 404
 
     return send_file(output_path, as_attachment=True, download_name=job["download_name"])
+
+
+@app.route("/api/summary-pdf/<job_id>")
+def api_summary_pdf(job_id):
+    """Download the AI summary as a PDF file."""
+    with jobs_lock:
+        job = jobs.get(job_id)
+
+    if job is None:
+        return jsonify({"error": "Job not found."}), 404
+
+    summary_text = job.get("summary_text")
+    if not summary_text:
+        return jsonify({"error": "No summary text available for this job."}), 400
+
+    base_download = job.get("download_name", "Summary.mp3")
+    pdf_name = base_download.replace(".mp3", ".pdf")
+
+    try:
+        from fpdf import FPDF
+        import io
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=20)
+        pdf.add_page()
+        pdf.set_margins(20, 20, 20)
+
+        # Title
+        pdf.set_font("Helvetica", "B", 16)
+        title = pdf_name.replace(".pdf", "")
+        pdf.cell(0, 10, title, new_x="LMARGIN", new_y="NEXT", align="C")
+        pdf.ln(6)
+
+        # Body — sanitize to latin-1 for built-in Helvetica font
+        pdf.set_font("Helvetica", size=11)
+        safe_text = summary_text.encode("latin-1", errors="replace").decode("latin-1")
+        pdf.multi_cell(0, 6, safe_text)
+
+        pdf_bytes = bytes(pdf.output())
+        pdf_io = io.BytesIO(pdf_bytes)
+        pdf_io.seek(0)
+
+        return send_file(
+            pdf_io,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=pdf_name,
+        )
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate PDF: {e}"}), 500
 
 
 if __name__ == "__main__":

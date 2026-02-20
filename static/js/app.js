@@ -114,6 +114,16 @@ const autoSegmentRadio = document.getElementById("auto-segment-radio");
 const manualSegmentRadio = document.getElementById("manual-segment-radio");
 const manualSegmentRadioLabel = document.getElementById("manual-segment-radio-label");
 
+// AI Summarize elements
+const summarizeOption = document.getElementById("summarize-option");
+const summarizeCheckbox = document.getElementById("summarize-checkbox");
+const summaryLengthOptions = document.getElementById("summary-length-options");
+const summarySection = document.getElementById("summary-section");
+const summaryTextDisplay = document.getElementById("summary-text-display");
+const summaryDownloadBtn = document.getElementById("summary-download-btn");
+const summaryPdfBtn = document.getElementById("summary-pdf-btn");
+const summaryResetBtn = document.getElementById("summary-reset-btn");
+
 // Manual segment elements
 const manualSegmentSection = document.getElementById("manual-segment-section");
 const manualSegmentSubtitle = document.getElementById("manual-segment-subtitle");
@@ -147,6 +157,7 @@ const userInfo = document.getElementById("user-info");
 const userAvatar = document.getElementById("user-avatar");
 const userName = document.getElementById("user-name");
 const userBadge = document.getElementById("user-badge");
+const tokensBadge = document.getElementById("tokens-badge");
 const signOutBtn = document.getElementById("sign-out-btn");
 const authButtons = document.getElementById("auth-buttons");
 const signInBtn = document.getElementById("sign-in-btn");
@@ -159,6 +170,7 @@ let testAudio = null;
 let clerk = null;
 let currentUser = null;
 let clerkConfig = null;
+let currentTokens = null;
 
 // Chapter state
 let currentBookId = null;
@@ -318,19 +330,36 @@ function showUserInfo() {
     // Get first letter for avatar
     const initial = (firstName || email)[0].toUpperCase();
 
-    // Check premium status
-    const isPremium = currentUser.publicMetadata?.isPremium === true;
+    // Check premium/admin status
+    const isAdmin = currentUser.publicMetadata?.role === "admin";
+    const isPremium = isAdmin || currentUser.publicMetadata?.isPremium === true;
 
     // Update UI
     userAvatar.textContent = initial;
     userName.textContent = displayName;
 
+    // Compute remaining summary tokens (lazy monthly reset; admins always get 100)
+    const tokensMeta = currentUser.publicMetadata;
+    if (isAdmin) {
+        currentTokens = 100;
+    } else {
+        const storedMonth = tokensMeta?.summarizeTokensMonth;
+        const nowMonth = new Date().toISOString().slice(0, 7);
+        currentTokens = (storedMonth === nowMonth)
+            ? (tokensMeta?.summarizeTokens ?? 10)
+            : 10;
+    }
+
     if (isPremium) {
         userBadge.classList.remove("hidden");
-        tierNote.innerHTML = 'Premium — unlimited pages!';
+        const tokenLabel = isAdmin ? `100 AI tokens (Admin)` : `${currentTokens} AI tokens`;
+        tokensBadge.textContent = tokenLabel;
+        tokensBadge.classList.remove("hidden");
+        tierNote.innerHTML = `${isAdmin ? "Admin" : "Premium"} — unlimited pages · AI summaries: up to 25 pages · ${currentTokens} tokens/month`;
         premiumUpgradeLink.classList.add("hidden");
     } else {
         userBadge.classList.add("hidden");
+        tokensBadge.classList.add("hidden");
         tierNote.innerHTML = `Free version — upload up to ${clerkConfig.freeTierLimit} pages at a time. <span id="premium-upgrade-link" class="premium-link">Get Premium for unlimited pages!</span>`;
         const newLink = document.getElementById("premium-upgrade-link");
         newLink.classList.remove("hidden");
@@ -383,6 +412,7 @@ function showPremiumModal() {
                 <li>Auto-segment ebooks into chapters</li>
                 <li>Customize audio segments by length or page count</li>
                 <li>Download individual chapter MP3s</li>
+                <li>AI summaries — 5, 10, or 30-minute book summaries</li>
                 <li>More advanced features coming soon</li>
             </ul>
             <p class="modal-pricing">All for just <strong>$2.49/mo</strong></p>
@@ -493,6 +523,7 @@ function showPremiumTrialPage() {
     if (chaptersSection) chaptersSection.classList.add("hidden");
     manualSegmentSection.classList.add("hidden");
     epubSegmentSection.classList.add("hidden");
+    summarySection.classList.add("hidden");
     errorSection.classList.add("hidden");
 
     premiumTrialSection.classList.remove("hidden");
@@ -646,16 +677,17 @@ function handleFile(file) {
     dropZone.classList.add("hidden");
     convertBtn.disabled = false;
 
-    // Show ebook checkbox for PDF/EPUB only (not DOCX)
+    // Show ebook and summarize options for PDF/EPUB only (not DOCX)
     if (supportsChapters(file.name)) {
         segmentOption.classList.remove("hidden");
+        summarizeOption.classList.remove("hidden");
         ebookCheckbox.checked = false;
         segmentTypeOptions.classList.add("hidden");
         autoSegmentRadio.checked = true;
-
         manualSegmentRadioLabel.classList.remove("hidden");
     } else {
         segmentOption.classList.add("hidden");
+        summarizeOption.classList.add("hidden");
         ebookCheckbox.checked = false;
         segmentTypeOptions.classList.add("hidden");
     }
@@ -666,25 +698,58 @@ clearFile.addEventListener("click", () => {
     fileInput.value = "";
     fileInfo.classList.add("hidden");
     segmentOption.classList.add("hidden");
+    summarizeOption.classList.add("hidden");
     ebookCheckbox.checked = false;
+    ebookCheckbox.disabled = false;
+    segmentOption.classList.remove("faded");
     segmentTypeOptions.classList.add("hidden");
     autoSegmentRadio.checked = true;
+    summarizeCheckbox.checked = false;
+    summarizeCheckbox.disabled = false;
+    summarizeOption.classList.remove("faded");
+    summaryLengthOptions.classList.add("hidden");
     dropZone.classList.remove("hidden");
     convertBtn.disabled = true;
 });
 
-// Ebook checkbox toggles radio options
+// Ebook checkbox — show segment options, lock out summarize
 ebookCheckbox.addEventListener("change", () => {
     if (ebookCheckbox.checked) {
         segmentTypeOptions.classList.remove("hidden");
+        // Disable and uncheck summarize
+        summarizeCheckbox.checked = false;
+        summarizeCheckbox.disabled = true;
+        summaryLengthOptions.classList.add("hidden");
+        summarizeOption.classList.add("faded");
     } else {
         segmentTypeOptions.classList.add("hidden");
+        summarizeCheckbox.disabled = false;
+        summarizeOption.classList.remove("faded");
+    }
+});
+
+// Summarize checkbox — show length options, lock out ebook
+summarizeCheckbox.addEventListener("change", () => {
+    if (summarizeCheckbox.checked) {
+        summaryLengthOptions.classList.remove("hidden");
+        // Disable and uncheck ebook
+        ebookCheckbox.checked = false;
+        ebookCheckbox.disabled = true;
+        segmentTypeOptions.classList.add("hidden");
+        segmentOption.classList.add("faded");
+    } else {
+        summaryLengthOptions.classList.add("hidden");
+        ebookCheckbox.disabled = false;
+        segmentOption.classList.remove("faded");
     }
 });
 
 // Helper: check if current user is premium
 function isPremiumUser() {
-    return currentUser && currentUser.publicMetadata?.isPremium === true;
+    return currentUser && (
+        currentUser.publicMetadata?.role === "admin" ||
+        currentUser.publicMetadata?.isPremium === true
+    );
 }
 
 // Helper: check if file type supports chapter detection
@@ -705,24 +770,30 @@ async function getAuthHeaders() {
     return headers;
 }
 
-// Convert button — routes based on ebook checkbox and radio state
+// Convert button — routes based on checkbox state
 convertBtn.addEventListener("click", async () => {
     if (!selectedFile) return;
 
-    if (ebookCheckbox.checked) {
-        // Ebook mode — premium only
+    if (summarizeCheckbox.checked) {
+        // AI summarize — premium only, independent of ebook checkbox
         if (!isPremiumUser()) {
             showEbookPremiumModal();
             return;
         }
-
+        await summarizeBook();
+    } else if (ebookCheckbox.checked) {
+        // Ebook chapter segmentation — premium only
+        if (!isPremiumUser()) {
+            showEbookPremiumModal();
+            return;
+        }
         if (manualSegmentRadio.checked) {
             await prepareManualSegment();
         } else {
             await analyzeBook();
         }
     } else {
-        // No segmentation — estimate and confirm flow
+        // Plain file — estimate and confirm flow
         await estimateAndConfirm();
     }
 });
@@ -882,7 +953,11 @@ async function listenProgress(jobId) {
             activeJobId = null;
             activeEventSource = null;
             progressControls.classList.add("hidden");
-            showDone(jobId);
+            if (data.summary_text) {
+                showSummaryResult(data.summary_text, jobId);
+            } else {
+                showDone(jobId);
+            }
         } else if (data.status === "cancelled") {
             stopFinalizingCycle();
             source.close();
@@ -1775,6 +1850,92 @@ switchToManualBtn.addEventListener("click", async () => {
 });
 
 
+// --- AI Summarization Flow ---
+
+async function summarizeBook() {
+    const summaryLength = document.querySelector('input[name="summary-length"]:checked')?.value || "medium";
+
+    // Client-side token guard before switching views
+    const tokenCosts = { short: 1, medium: 2, long: 4 };
+    const cost = tokenCosts[summaryLength] || 1;
+    if (currentTokens !== null && currentTokens < cost) {
+        showError(`You're out of AI summary tokens for this month. Tokens reset on the 1st of each month.`);
+        return;
+    }
+
+    uploadSection.classList.add("hidden");
+    progressSection.classList.remove("hidden");
+    progressBar.style.width = "0%";
+    progressText.textContent = "Uploading and extracting text...";
+    progressPrompt.textContent = "";
+    progressPrompt.classList.remove("visible");
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("voice", voiceSelect.value);
+    formData.append("rate", speedSelect.value);
+    formData.append("summary_length", summaryLength);
+
+    try {
+        const headers = await getAuthHeaders();
+
+        const res = await fetch("/api/summarize", {
+            method: "POST",
+            body: formData,
+            headers: headers,
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+
+        // Update token count display from server response
+        if (data.tokens_remaining !== undefined) {
+            currentTokens = data.tokens_remaining;
+            tokensBadge.textContent = `${currentTokens} AI tokens`;
+        }
+
+        listenProgress(data.job_id);
+    } catch (err) {
+        console.error("summarizeBook error:", err);
+        showError("Failed to start summarization. Please try again.");
+    }
+}
+
+function showSummaryResult(summaryText, jobId) {
+    progressSection.classList.add("hidden");
+    summaryTextDisplay.textContent = summaryText;
+    summaryDownloadBtn.href = `/api/download/${jobId}`;
+    summaryDownloadBtn.dataset.jobId = jobId;
+    summaryPdfBtn.href = `/api/summary-pdf/${jobId}`;
+    summaryPdfBtn.dataset.jobId = jobId;
+    summarySection.classList.remove("hidden");
+}
+
+// Fresh-token auth on summary MP3 download
+summaryDownloadBtn.addEventListener("click", async (e) => {
+    if (clerk && clerk.session) {
+        e.preventDefault();
+        const freshToken = await clerk.session.getToken();
+        const jobId = summaryDownloadBtn.dataset.jobId;
+        const url = freshToken
+            ? `/api/download/${jobId}?token=${encodeURIComponent(freshToken)}`
+            : `/api/download/${jobId}`;
+        window.location.href = url;
+    }
+});
+
+// PDF download (no auth token needed — job ID is unguessable UUID)
+summaryPdfBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    const jobId = summaryPdfBtn.dataset.jobId;
+    window.location.href = `/api/summary-pdf/${jobId}`;
+});
+
+summaryResetBtn.addEventListener("click", resetUI);
+
 function showError(message, requiresPremium) {
     uploadSection.classList.add("hidden");
     progressSection.classList.add("hidden");
@@ -1784,6 +1945,7 @@ function showError(message, requiresPremium) {
     manualSegmentSection.classList.add("hidden");
     epubSegmentSection.classList.add("hidden");
     premiumTrialSection.classList.add("hidden");
+    summarySection.classList.add("hidden");
     errorSection.classList.remove("hidden");
     errorText.textContent = message;
 
@@ -1819,7 +1981,17 @@ function resetUI() {
     manualSegmentSection.classList.add("hidden");
     epubSegmentSection.classList.add("hidden");
     premiumTrialSection.classList.add("hidden");
+    summarySection.classList.add("hidden");
+    summarizeOption.classList.add("hidden");
     uploadSection.classList.remove("hidden");
+
+    // Reset summarize + ebook mutual-exclusion state
+    summarizeCheckbox.checked = false;
+    summarizeCheckbox.disabled = false;
+    summarizeOption.classList.remove("faded");
+    summaryLengthOptions.classList.add("hidden");
+    ebookCheckbox.disabled = false;
+    segmentOption.classList.remove("faded");
 
     // Reset chapter state
     currentBookId = null;

@@ -24,3 +24,6 @@ CLERK_PUBLISHABLE_KEY = os.getenv("CLERK_PUBLISHABLE_KEY", "")
 CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY", "")
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+
+# Google Gemini API (for AI summarization)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
