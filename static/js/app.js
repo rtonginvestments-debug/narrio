@@ -355,7 +355,9 @@ function showUserInfo() {
         const tokenLabel = isAdmin ? `100 AI tokens (Admin)` : `${currentTokens} AI tokens`;
         tokensBadge.textContent = tokenLabel;
         tokensBadge.classList.remove("hidden");
-        tierNote.innerHTML = `${isAdmin ? "Admin" : "Premium"} — unlimited pages · AI summaries: up to 25 pages · ${currentTokens} tokens/month`;
+        tierNote.innerHTML = isAdmin
+            ? `Admin — unlimited pages · AI summaries: unlimited pages · ${currentTokens} tokens/month`
+            : `Premium — unlimited pages · AI summaries: up to 25 pages · ${currentTokens} tokens/month`;
         premiumUpgradeLink.classList.add("hidden");
     } else {
         userBadge.classList.add("hidden");
