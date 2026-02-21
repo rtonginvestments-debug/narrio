@@ -1345,6 +1345,7 @@ def api_summarize():
 
     # Enforce 25-page limit for AI summaries (admins are exempt)
     is_admin = user_data.get("public_metadata", {}).get("role") == "admin"
+    print(f"[SUMMARIZE] user_id={user_id} is_admin={is_admin} public_metadata={user_data.get('public_metadata', {})}", file=sys.stderr, flush=True)
     if not is_admin:
         try:
             page_count = get_page_count(upload_path)
