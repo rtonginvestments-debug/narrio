@@ -1402,6 +1402,22 @@ def api_summarize():
     return jsonify({"job_id": job_id, "tokens_remaining": new_remaining})
 
 
+@app.route("/api/debug-me")
+@require_auth
+def api_debug_me():
+    """Return raw user data from Clerk — for debugging metadata issues."""
+    user_data = get_current_user()
+    if not user_data:
+        return jsonify({"error": "Not authenticated"}), 401
+    is_admin = user_data.get("public_metadata", {}).get("role") == "admin"
+    return jsonify({
+        "user_id": user_data.get("id") or user_data.get("sub"),
+        "public_metadata": user_data.get("public_metadata", {}),
+        "is_admin": is_admin,
+        "is_premium": is_premium_user(user_data),
+    })
+
+
 @app.route("/api/cancel/<job_id>", methods=["POST"])
 def api_cancel(job_id):
     """Cancel a running conversion job."""
