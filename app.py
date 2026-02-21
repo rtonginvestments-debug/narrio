@@ -252,7 +252,7 @@ def run_chapter_conversion_throttled(semaphore, job_id, book_id, chapter_index, 
         semaphore.release()
 
 
-def run_summarize(job_id, filepath, original_name, voice, rate, summary_length):
+def run_summarize(job_id, filepath, original_name, voice, rate, summary_length, is_admin=False):
     """Extract text, summarize with Claude, then convert summary to audio."""
     def update_progress(percent, message):
         if is_job_cancelled(job_id):
@@ -271,7 +271,7 @@ def run_summarize(job_id, filepath, original_name, voice, rate, summary_length):
         update_progress(20, "Text extracted. Generating AI summary...")
 
         # Truncate to stay comfortably within Claude's context window
-        max_chars = 150_000
+        max_chars = 500_000 if is_admin else 150_000
         truncated = len(text) > max_chars
         input_text = text[:max_chars]
 
@@ -1343,16 +1343,18 @@ def api_summarize():
     upload_path = os.path.join(UPLOAD_FOLDER, f"{job_id}.{ext}")
     file.save(upload_path)
 
-    # Enforce 25-page limit for AI summaries
-    try:
-        page_count = get_page_count(upload_path)
-        if page_count > 25:
-            os.remove(upload_path)
-            return jsonify({
-                "error": f"AI summaries are limited to files with 25 pages or fewer. This file has {page_count} pages."
-            }), 400
-    except Exception:
-        pass  # don't block if page counting fails
+    # Enforce 25-page limit for AI summaries (admins are exempt)
+    is_admin = user_data.get("public_metadata", {}).get("role") == "admin"
+    if not is_admin:
+        try:
+            page_count = get_page_count(upload_path)
+            if page_count > 25:
+                os.remove(upload_path)
+                return jsonify({
+                    "error": f"AI summaries are limited to files with 25 pages or fewer. This file has {page_count} pages."
+                }), 400
+        except Exception:
+            pass  # don't block if page counting fails
 
     # Token cost map and check
     token_costs = {"short": 1, "medium": 2, "long": 4}
@@ -1381,7 +1383,7 @@ def api_summarize():
 
     thread = threading.Thread(
         target=run_summarize,
-        args=(job_id, upload_path, file.filename, voice, rate, summary_length),
+        args=(job_id, upload_path, file.filename, voice, rate, summary_length, is_admin),
         daemon=True,
     )
     thread.start()
