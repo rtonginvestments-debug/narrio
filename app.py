@@ -1403,12 +1403,11 @@ def api_summarize():
 
 
 @app.route("/api/debug-me")
-@require_auth
 def api_debug_me():
     """Return raw user data from Clerk — for debugging metadata issues."""
     user_data = get_current_user()
     if not user_data:
-        return jsonify({"error": "Not authenticated"}), 401
+        return jsonify({"error": "Not authenticated — append ?token=<your_clerk_token> to the URL"}), 401
     is_admin = user_data.get("public_metadata", {}).get("role") == "admin"
     return jsonify({
         "user_id": user_data.get("id") or user_data.get("sub"),
