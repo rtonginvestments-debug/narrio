@@ -36,6 +36,14 @@ def get_voices(language_prefix="en"):
         except RuntimeError:
             _voices_cache = asyncio.run(_fetch_voices())
 
+    # Only expose these 4 curated voices in the UI
+    _ALLOWED_VOICES = {
+        "en-US-AriaNeural",
+        "en-US-AndrewMultilingualNeural",
+        "en-US-ChristopherNeural",
+        "en-US-JennyNeural",
+    }
+
     return [
         {
             "name": v["ShortName"],
@@ -43,7 +51,7 @@ def get_voices(language_prefix="en"):
             "gender": v["Gender"],
         }
         for v in _voices_cache
-        if v["ShortName"].startswith(language_prefix)
+        if v["ShortName"] in _ALLOWED_VOICES
     ]
 
 

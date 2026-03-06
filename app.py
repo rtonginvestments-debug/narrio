@@ -523,14 +523,11 @@ def api_test_voice():
     """Generate a short test clip for the selected voice."""
     voice = request.form.get("voice", DEFAULT_VOICE)
 
-    # Extract the short name (e.g. "Aria" from "en-US-AriaNeural")
+    # Extract the first name (e.g. "Aria" from "en-US-AriaNeural")
     parts = voice.split("-")
-    short_name = parts[-1].replace("Neural", "") if len(parts) >= 3 else voice
+    short_name = parts[-1].replace("Neural", "").replace("Multilingual", "") if len(parts) >= 3 else voice
 
-    test_text = (
-        f"Hi there, welcome to Narrio, your personal file narrator. "
-        f"I'm {short_name}. This is my reading voice."
-    )
+    test_text = f"Hi, welcome to Narrio. I'm {short_name}, this is my reading voice."
 
     test_id = str(uuid.uuid4())
     output_path = os.path.join(OUTPUT_FOLDER, f"test_{test_id}.mp3")
