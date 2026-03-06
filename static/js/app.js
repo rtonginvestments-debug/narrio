@@ -295,6 +295,11 @@ async function initClerk() {
                 sessionStorage.removeItem("pendingTrialFlow");
                 showPremiumTrialPage();
             }
+
+            // Check if returning from successful Stripe checkout
+            if (new URLSearchParams(window.location.search).get("subscribed") === "1") {
+                showSubscriptionSuccessModal();
+            }
         } else {
             console.log("No user signed in");
             showAuthButtons();
@@ -400,11 +405,19 @@ async function showSignIn() {
 }
 
 function showPremiumModal() {
+    // Determine if trial was already used
+    const meta = currentUser?.publicMetadata || {};
+    const trialUsed = meta.trialExpired || meta.trialStart || meta.trialEnd;
+
     // Create modal overlay
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
 
-    // Create modal content
+    // Create modal content — show subscribe CTA if trial used, otherwise trial CTA
+    const ctaButton = trialUsed
+        ? `<button class="modal-cta-btn" id="modal-subscribe-btn">Subscribe — $2.49/mo</button>`
+        : `<button class="modal-cta-btn" id="modal-start-trial-btn">Start Free 3-Day Trial</button>`;
+
     overlay.innerHTML = `
         <div class="modal-content">
             <div class="modal-icon">&#9889;</div>
@@ -418,9 +431,7 @@ function showPremiumModal() {
                 <li>More advanced features coming soon</li>
             </ul>
             <p class="modal-pricing">All for just <strong>$2.49/mo</strong></p>
-            <button class="modal-cta-btn" id="modal-start-trial-btn">
-                Start Free 3-Day Trial
-            </button>
+            ${ctaButton}
             <button class="modal-close-link" onclick="this.closest('.modal-overlay').remove()">
                 Maybe later
             </button>
@@ -436,16 +447,30 @@ function showPremiumModal() {
 
     document.body.appendChild(overlay);
 
-    // Bind trial button
-    document.getElementById("modal-start-trial-btn").addEventListener("click", () => {
-        overlay.remove();
-        startTrialFlow();
-    });
+    // Bind CTA button
+    if (trialUsed) {
+        document.getElementById("modal-subscribe-btn").addEventListener("click", () => {
+            overlay.remove();
+            startSubscribeFlow();
+        });
+    } else {
+        document.getElementById("modal-start-trial-btn").addEventListener("click", () => {
+            overlay.remove();
+            startTrialFlow();
+        });
+    }
 }
 
 function showEbookPremiumModal() {
+    const meta = currentUser?.publicMetadata || {};
+    const trialUsed = meta.trialExpired || meta.trialStart || meta.trialEnd;
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
+
+    const ctaButton = trialUsed
+        ? `<button class="modal-cta-btn" id="modal-ebook-trial-btn">Subscribe — $2.49/mo</button>`
+        : `<button class="modal-cta-btn" id="modal-ebook-trial-btn">Start Free 3-Day Trial</button>`;
 
     overlay.innerHTML = `
         <div class="modal-content">
@@ -457,9 +482,7 @@ function showEbookPremiumModal() {
                 uploads, and access other advanced tools.
             </p>
             <p class="modal-pricing">All for just <strong>$2.49/mo</strong></p>
-            <button class="modal-cta-btn" id="modal-ebook-trial-btn">
-                Start Free 3-Day Trial
-            </button>
+            ${ctaButton}
             <button class="modal-close-link" onclick="this.closest('.modal-overlay').remove()">
                 Maybe later
             </button>
@@ -474,7 +497,7 @@ function showEbookPremiumModal() {
 
     document.getElementById("modal-ebook-trial-btn").addEventListener("click", () => {
         overlay.remove();
-        startTrialFlow();
+        trialUsed ? startSubscribeFlow() : startTrialFlow();
     });
 }
 
@@ -514,6 +537,90 @@ function startTrialFlow() {
     // Persist flag so it survives page reloads after Clerk sign-up
     sessionStorage.setItem("pendingTrialFlow", "1");
     clerk.openSignUp();
+}
+
+async function startSubscribeFlow() {
+    // Must be signed in
+    if (!clerk || !clerk.user) {
+        sessionStorage.setItem("pendingSubscribeFlow", "1");
+        clerk.openSignIn();
+        return;
+    }
+
+    try {
+        const headers = await getAuthHeaders();
+        headers["Content-Type"] = "application/json";
+
+        const res = await fetch("/api/create-checkout-session", {
+            method: "POST",
+            headers: headers,
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            try {
+                const errData = JSON.parse(text);
+                showError(errData.error || "Checkout failed.");
+            } catch {
+                console.error("Non-JSON response:", res.status, text.substring(0, 200));
+                showError("Authentication error. Please sign in and try again.");
+            }
+            return;
+        }
+
+        const data = await res.json();
+
+        if (data.url) {
+            window.location.href = data.url;
+        }
+    } catch (err) {
+        console.error("Subscribe flow error:", err, err.message);
+        showError("Failed to start checkout. Please try again.");
+    }
+}
+
+function showSubscriptionSuccessModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    overlay.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-icon">&#127881;</div>
+            <h2 class="modal-title">Welcome to Narrio Pro!</h2>
+            <p class="modal-message">
+                Your subscription is active. You now have full access to all premium features:
+            </p>
+            <ul class="modal-features">
+                <li>Unlimited page caps per document</li>
+                <li>Auto chapter segmentation</li>
+                <li>Manual segmentation by audio length or pages</li>
+                <li>Individual chapter MP3 downloads</li>
+                <li>AI summaries — 5, 10, or 30-minute book summaries</li>
+            </ul>
+            <button class="modal-cta-btn" id="sub-success-close-btn">
+                Start Exploring
+            </button>
+        </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+            // Clean up URL param
+            const url = new URL(window.location);
+            url.searchParams.delete("subscribed");
+            window.history.replaceState({}, "", url);
+        }
+    });
+
+    document.body.appendChild(overlay);
+
+    document.getElementById("sub-success-close-btn").addEventListener("click", () => {
+        overlay.remove();
+        const url = new URL(window.location);
+        url.searchParams.delete("subscribed");
+        window.history.replaceState({}, "", url);
+    });
 }
 
 function showPremiumTrialPage() {
@@ -556,6 +663,9 @@ function showTrialWelcomeModal() {
             <button class="modal-cta-btn" id="trial-welcome-close-btn">
                 Start Exploring
             </button>
+            <button class="modal-cta-btn" id="trial-welcome-subscribe-btn" style="margin-top: 0.5rem; background: transparent; border: 2px solid var(--accent); color: var(--accent);">
+                Subscribe Now ($2.49/mo)
+            </button>
         </div>
     `;
 
@@ -571,6 +681,11 @@ function showTrialWelcomeModal() {
     document.getElementById("trial-welcome-close-btn").addEventListener("click", () => {
         overlay.remove();
         window.location.reload();
+    });
+
+    document.getElementById("trial-welcome-subscribe-btn").addEventListener("click", () => {
+        overlay.remove();
+        startSubscribeFlow();
     });
 }
 
@@ -2021,7 +2136,9 @@ resetBtn.addEventListener("click", resetUI);
 errorResetBtn.addEventListener("click", resetUI);
 document.getElementById("error-premium-btn").addEventListener("click", () => {
     errorSection.classList.add("hidden");
-    startTrialFlow();
+    const meta = currentUser?.publicMetadata || {};
+    const trialUsed = meta.trialExpired || meta.trialStart || meta.trialEnd;
+    trialUsed ? startSubscribeFlow() : startTrialFlow();
 });
 
 // Test voice

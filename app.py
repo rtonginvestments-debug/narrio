@@ -4,13 +4,15 @@ import uuid
 import time
 import shutil
 import threading
-from flask import Flask, request, jsonify, render_template, send_file, Response
+from flask import Flask, request, jsonify, render_template, send_file, Response, g
 import json
+import stripe
 
 from config import (
     UPLOAD_FOLDER, OUTPUT_FOLDER, ALLOWED_EXTENSIONS,
     MAX_FILE_SIZE, DEFAULT_VOICE, DEFAULT_RATE, CLEANUP_AGE,
     FREE_PAGE_LIMIT, CLERK_PUBLISHABLE_KEY, GEMINI_API_KEY,
+    STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID,
 )
 from extractors import extract_text, get_page_count, extract_chapters
 from tts import get_voices, convert_to_speech
@@ -443,8 +445,10 @@ def api_config():
     """Return frontend configuration including Clerk keys."""
     # Read directly from env at request time to pick up Railway env vars
     clerk_key = os.getenv("CLERK_PUBLISHABLE_KEY", "") or CLERK_PUBLISHABLE_KEY
+    stripe_pub_key = os.getenv("STRIPE_PUBLISHABLE_KEY", "") or STRIPE_PUBLISHABLE_KEY
     return jsonify({
         "clerkPublishableKey": clerk_key,
+        "stripePublishableKey": stripe_pub_key,
         "freeTierLimit": FREE_PAGE_LIMIT,
     })
 
@@ -501,6 +505,115 @@ def api_start_trial():
         return jsonify({"error": "Failed to activate trial. Please try again."}), 500
 
     return jsonify({"status": "trial_started", "trialEnd": trial_end})
+
+
+# --- Stripe Subscription Routes ---
+
+@app.route("/api/create-checkout-session", methods=["POST"])
+@require_auth
+def api_create_checkout_session():
+    """Create a Stripe Checkout Session for $2.49/mo subscription."""
+    secret_key = os.getenv("STRIPE_SECRET_KEY", "") or STRIPE_SECRET_KEY
+    price_id = os.getenv("STRIPE_PRICE_ID", "") or STRIPE_PRICE_ID
+
+    if not secret_key or not price_id:
+        return jsonify({"error": "Stripe is not configured."}), 500
+
+    stripe.api_key = secret_key
+
+    user_data = g.user
+    user_id = user_data.get("id") or user_data.get("sub")
+    if not user_id:
+        return jsonify({"error": "Could not determine user ID."}), 400
+
+    # Get user email for Stripe prefill
+    emails = user_data.get("email_addresses", [])
+    customer_email = emails[0]["email_address"] if emails else None
+
+    try:
+        # Determine base URL from request
+        base_url = request.host_url.rstrip("/")
+
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=f"{base_url}/?subscribed=1",
+            cancel_url=f"{base_url}/",
+            customer_email=customer_email,
+            client_reference_id=user_id,
+            subscription_data={
+                "metadata": {"clerk_user_id": user_id},
+            },
+            metadata={"clerk_user_id": user_id},
+        )
+
+        return jsonify({"url": session.url})
+    except Exception as e:
+        print(f"Checkout session error: {e}", flush=True)
+        return jsonify({"error": "Failed to create checkout session."}), 500
+
+
+@app.route("/api/webhook/stripe", methods=["POST"])
+def api_stripe_webhook():
+    """Handle Stripe webhook events to sync subscription status with Clerk."""
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "") or STRIPE_WEBHOOK_SECRET
+    secret_key = os.getenv("STRIPE_SECRET_KEY", "") or STRIPE_SECRET_KEY
+
+    if not webhook_secret or not secret_key:
+        return jsonify({"error": "Webhook not configured"}), 500
+
+    stripe.api_key = secret_key
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get("Stripe-Signature")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except (ValueError, stripe.SignatureVerificationError) as e:
+        print(f"Stripe webhook signature verification failed: {e}", flush=True)
+        return jsonify({"error": "Invalid signature"}), 400
+
+    event_type = event["type"]
+    data_object = event["data"]["object"]
+
+    print(f"Stripe webhook received: {event_type}", flush=True)
+
+    if event_type == "checkout.session.completed":
+        clerk_user_id = data_object.get("client_reference_id") or \
+                        data_object.get("metadata", {}).get("clerk_user_id")
+        if clerk_user_id:
+            stripe_customer_id = data_object.get("customer")
+            stripe_subscription_id = data_object.get("subscription")
+            update_clerk_metadata(clerk_user_id, {
+                "isPremium": True,
+                "trialEnd": None,
+                "trialExpired": None,
+                "subscriptionStatus": "active",
+                "stripeCustomerId": stripe_customer_id,
+                "stripeSubscriptionId": stripe_subscription_id,
+            })
+            print(f"Activated premium for user {clerk_user_id}", flush=True)
+
+    elif event_type == "customer.subscription.deleted":
+        clerk_user_id = data_object.get("metadata", {}).get("clerk_user_id")
+        if clerk_user_id:
+            update_clerk_metadata(clerk_user_id, {
+                "isPremium": False,
+                "subscriptionStatus": "canceled",
+            })
+            print(f"Revoked premium for user {clerk_user_id} (subscription canceled)", flush=True)
+
+    elif event_type == "customer.subscription.updated":
+        clerk_user_id = data_object.get("metadata", {}).get("clerk_user_id")
+        status = data_object.get("status")  # active, past_due, canceled, unpaid, etc.
+        if clerk_user_id and status:
+            is_active = status == "active"
+            update_clerk_metadata(clerk_user_id, {
+                "isPremium": is_active,
+                "subscriptionStatus": status,
+            })
+            print(f"Updated subscription status for user {clerk_user_id}: {status}", flush=True)
+
+    return jsonify({"received": True}), 200
 
 
 @app.route("/api/debug-auth")

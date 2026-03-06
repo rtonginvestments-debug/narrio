@@ -237,6 +237,11 @@ def is_premium_user(user_data):
     if not public_metadata.get("isPremium", False):
         return False
 
+    # Check subscription status — revoked states override isPremium
+    sub_status = public_metadata.get("subscriptionStatus", "")
+    if sub_status in ("past_due", "unpaid", "canceled", "incomplete_expired"):
+        return False
+
     # Check trial expiration
     trial_end = public_metadata.get("trialEnd")
     if trial_end:
